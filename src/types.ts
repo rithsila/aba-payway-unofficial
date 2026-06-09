@@ -39,8 +39,10 @@ export interface PurchaseResponse {
 export type PaymentStatus =
   | "PENDING"
   | "APPROVED"
+  | "PRE-AUTH"
   | "DECLINED"
   | "REFUNDED"
+  | "CANCELLED"
   | "ERROR";
 
 export interface StatusResponse {

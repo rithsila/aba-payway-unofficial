@@ -56,10 +56,10 @@ if (purchase.success) {
 const status = await aba.checkStatus(txnId);
 console.log("Payment status:", status.status); // "APPROVED" | "PENDING" | ...
 
-// 4. Verify a webhook
+// 4. Verify a webhook (signature comes in the X-PAYWAY-HMAC-SHA512 header)
 const isValid = await aba.verifyWebhook(
-  rawBody,
-  signatureHeader,
+  rawBody, // raw JSON callback body
+  signatureHeader, // value of the X-PAYWAY-HMAC-SHA512 header
   webhookSecret,
 );
 
@@ -99,7 +99,7 @@ console.log("KHQR image:", khqrImage); // "data:image/svg+xml;base64,..."
 | `PurchaseRequest`  | Input for `createPurchase`                                       |
 | `PurchaseResponse` | Result from `createPurchase`                                     |
 | `StatusResponse`   | Result from `checkStatus`                                        |
-| `PaymentStatus`    | `"PENDING" \| "APPROVED" \| "DECLINED" \| "REFUNDED" \| "ERROR"` |
+| `PaymentStatus`    | `"PENDING" \| "APPROVED" \| "PRE-AUTH" \| "DECLINED" \| "REFUNDED" \| "CANCELLED" \| "ERROR"` |
 | `KHQROptions`      | Input for `generateKHQR`                                         |
 | `HashParams`       | Raw parameters for hash generation                               |
 
