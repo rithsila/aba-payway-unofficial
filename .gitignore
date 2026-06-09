@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 *.tgz
+credential_info.txt
+.DS_Store

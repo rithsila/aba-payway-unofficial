@@ -13,20 +13,32 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
-    "test": "vitest run",
+    "test": "vitest run --exclude '**/integration/**'",
     "test:watch": "vitest",
+    "test:sandbox": "vitest run tests/integration",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["aba", "payway", "khqr", "cambodia", "payment", "bakong", "qr"],
+  "keywords": [
+    "aba",
+    "payway",
+    "khqr",
+    "cambodia",
+    "payment",
+    "bakong",
+    "qr"
+  ],
   "author": "rithsila",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "dotenv": "^17.4.2",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
