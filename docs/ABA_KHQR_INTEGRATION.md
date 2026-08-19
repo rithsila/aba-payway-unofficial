@@ -1,329 +1,160 @@
-# ABA KHQR Integration Guide
+# ABA PayWay integration in this project
 
-**Last Updated:** 2026-01-20  
-**Status:** Implemented (Sandbox)
+**Status:** implemented, waiting on real sandbox credentials for a live test.
 
-## Overview
+This describes how the Ai-Cha / Zhengda Telegram Mini App takes KHQR payments
+through ABA PayWay. For the SDK itself, see the package `README.md`. For the
+live test steps, see `docs/ABA_SANDBOX_TESTING.md` in the repo root.
 
-This document describes the ABA PayWay KHQR integration for local Cambodian payments. KHQR (Khmer QR) is Cambodia's national QR payment standard supported by all major banks.
-
-## Architecture
+## How the money flows
 
 ```
-┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
-│ Frontend        │────▶│ create-khqr          │────▶│ ABA PayWay API  │
-│ (Next.js)       │     │ (Edge Function)      │     │ (Sandbox)       │
-└─────────────────┘     └──────────────────────┘     └─────────────────┘
-        │                         │
-        │                         ▼
-        │               ┌──────────────────────┐
-        │               │ Supabase Database    │
-        │               │ (orders table)       │
-        │               └──────────────────────┘
-        │                         │
-        ▼                         ▼
-┌─────────────────┐     ┌──────────────────────┐
-│ check-khqr-     │────▶│ webhook-aba          │
-│ status (polling)│     │ (payment callback)   │
-└─────────────────┘     └──────────────────────┘
+Customer app                 API (apps/api)               ABA PayWay
+------------                 --------------               ----------
+POST /api/orders        -->  creates a pending order
+                             (prices come from the DB,
+                              never from the client)
+
+POST /api/payment/
+     aba/create         -->  createPurchase() ---------->  returns checkout URL,
+                                                           deeplink and QR data
+                        <--  QR image + links
+
+customer pays with ABA Mobile or by scanning ------------> ABA
+
+GET  /api/payment/           checkStatus() ------------->  "APPROVED"?
+     aba/status/:orderId <-- marks the order paid,
+     (every 3 seconds)       credits loyalty points
 ```
 
-## API Endpoints
+There are two ways to learn that a payment landed:
 
-### 1. Create KHQR Payment
+1. **The status route** — we ask ABA. Works everywhere, including a laptop.
+2. **The webhook** — ABA tells us. Needs a public HTTPS address.
 
-**Endpoint:** `POST /functions/v1/create-khqr`
+The app uses the status route. The webhook is a backup for production.
 
-**Request:**
+## The three routes
+
+All three live in `apps/api/src/app.ts`.
+
+All three return **503** if `ABA_MERCHANT_ID` or `ABA_API_KEY` is missing. The
+server never falls back to fake credentials, because that turns a simple
+configuration mistake into a confusing "wrong hash" error.
+
+### `POST /api/payment/aba/create`
+
+Starts a payment for an order that already exists.
+
+Request: `{ "orderId": "..." }`
+
+Response:
+
 ```json
 {
-  "plan_type": "MONTHLY",
-  "currency": "USD",
-  "customer_email": "customer@example.com",
-  "customer_phone": "012345678",
-  "customer_name": "John Doe"
+  "checkoutUrl": "https://checkout-sandbox.payway.com.kh/checkout/...",
+  "abapayDeeplink": "abapay://...",
+  "qrString": "00020101021229370016...",
+  "khqrSvg": "data:image/svg+xml;base64,...",
+  "transactionId": "EA...",
+  "expiresAt": "2026-08-19T10:00:00.000Z"
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "transaction_id": "EAXXXXXXXXXX",
-  "checkout_url": "https://checkout-sandbox.payway.com.kh/checkout/...",
-  "abapay_deeplink": "abapay://...",
-  "qr_code": "data:image/svg+xml;base64,...",
-  "amount": 15.00,
-  "currency": "USD",
-  "plan_type": "MONTHLY",
-  "expires_at": "2026-01-20T12:15:00.000Z",
-  "uses_fallback": false
-}
+Other replies: `404` unknown order, `409` already paid or zero total, `502` ABA
+refused (the message is ABA's own).
+
+Two details that matter:
+
+- It sends `payment_option=abapay_khqr`. Without it ABA returns no QR data at
+  all and the customer sees an empty grey box.
+- It sends `items` as base64-encoded JSON, which is what ABA expects.
+
+If the order already has a transaction ID, the same one is reused, so
+refreshing the checkout page does not leave an orphan transaction at ABA.
+
+### `GET /api/payment/aba/status/:orderId`
+
+Asks ABA whether the payment landed. This is what the checkout screen polls.
+
+Response: `{ "status": "...", "orderStatus": "...", "pickupCode": "...", "expiresAt": "..." }`
+
+`status` is one of `APPROVED`, `PENDING`, `DECLINED`, `EXPIRED`, `ERROR`.
+
+When ABA says approved **and** the amount matches the order total, the order is
+marked `paid` and loyalty points are credited.
+
+### `POST /api/payment/aba/webhook`
+
+ABA calls this when a payment completes.
+
+It is deliberately strict:
+
+- No `ABA_WEBHOOK_SECRET` configured → **503**. An unverified webhook would let
+  anyone mark an order as paid.
+- Bad or missing signature → **401**.
+- Valid signature → the server still calls `checkStatus` and compares the
+  amount before settling anything. The payload's own `status` field is never
+  trusted.
+- Amount does not match the order total → **400**, order stays pending.
+- Order already paid → **200** and nothing changes. ABA retries webhooks, and
+  points must not be credited twice.
+
+## Environment variables
+
+In `apps/api/.env`:
+
+| Variable | What it is |
+| --- | --- |
+| `ABA_MERCHANT_ID` | Your merchant ID from ABA |
+| `ABA_API_KEY` | Your API key (public key) |
+| `ABA_BASE_URL` | `https://checkout-sandbox.payway.com.kh` for testing, `https://checkout.payway.com.kh` for real money |
+| `ABA_WEBHOOK_SECRET` | Secret for checking webhook signatures. Empty means webhooks are rejected. |
+| `ABA_WEBHOOK_URL` | Public URL ABA returns the customer to. Optional locally. |
+
+## The hash
+
+Every call to ABA is signed. The signature is:
+
+```
+Base64( HMAC_SHA512( API_KEY, all parameters joined in a fixed order ) )
 ```
 
-**Plan Types:**
-| Plan | USD | KHR |
-|------|-----|-----|
-| MONTHLY | $15 | ៛61,500 |
-| YEARLY | $99 | ៛405,900 |
-| LIFETIME | $299 | ៛1,225,900 |
-| MULTI_MONTHLY | $35 | ៛143,500 |
-| MULTI_YEARLY | $199 | ៛815,900 |
-| MULTI_LIFETIME | $499 | ៛2,045,900 |
+The exact order is the array in `src/hash.ts`. The same fields, in the same
+order, are built in `src/client.ts`. **If you change one, change the other**, or
+every request fails with "Wrong Hash".
 
-### 2. Check Payment Status
+Empty optional fields are sent as empty strings, never left out.
 
-**Endpoint:** `POST /functions/v1/check-khqr-status`
+`req_time` is `YYYYMMDDHHmmss` in **UTC**. Using the server's local clock makes
+requests look expired from any machine outside UTC.
 
-**Request:**
-```json
-{
-  "transaction_id": "EAXXXXXXXXXX"
-}
-```
+## Status codes from ABA
 
-**Response (Pending):**
-```json
-{
-  "success": true,
-  "transaction_id": "EAXXXXXXXXXX",
-  "status": "PENDING",
-  "message": "Waiting for payment confirmation..."
-}
-```
+- `0` — success
+- non-zero — an error; `description` explains it
+- `1` — wrong hash
+- `11` — invalid merchant
 
-**Response (Paid):**
-```json
-{
-  "success": true,
-  "transaction_id": "EAXXXXXXXXXX",
-  "status": "PAID",
-  "license_key": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "plan_type": "MONTHLY",
-  "expires_at": "2026-02-20T00:00:00.000Z",
-  "message": "Payment completed successfully!"
-}
-```
+## Before going live
 
-**Status Values:**
-- `PENDING` - Waiting for payment
-- `PAID` - Payment successful, license created
-- `EXPIRED` - QR code expired (15 minutes)
-- `FAILED` - Payment declined
-- `NOT_FOUND` - Transaction not found
-
-### 3. Webhook Handler
-
-**Endpoint:** `POST /functions/v1/webhook-aba`
-
-ABA PayWay sends payment notifications to this endpoint. The webhook:
-1. Verifies the signature using HMAC-SHA512
-2. Finds the pending order
-3. Creates a license on payment success
-4. Updates order status
-
-## Environment Variables
-
-Required secrets in Supabase:
-
-```bash
-# Set via: supabase secrets set KEY=VALUE
-
-ABA_PAYWAY_MERCHANT_ID=YOUR_ABA_PAYWAY_MERCHANT_ID
-ABA_PAYWAY_API_KEY=YOUR_ABA_PAYWAY_API_KEY
-ABA_PAYWAY_WEBHOOK_SECRET=YOUR_ABA_PAYWAY_WEBHOOK_SECRET
-ABA_PAYWAY_BASE_URL=https://checkout-sandbox.payway.com.kh
-NEXT_PUBLIC_SITE_URL=https://easafetyscore.com
-```
-
-## Frontend Integration
-
-### Payment Flow
-
-```typescript
-// 1. Create KHQR payment
-const response = await fetch('/api/create-khqr', {
-  method: 'POST',
-  body: JSON.stringify({
-    plan_type: 'MONTHLY',
-    currency: 'USD',
-    customer_email: user.email,
-  }),
-});
-const { transaction_id, qr_code, checkout_url, expires_at } = await response.json();
-
-// 2. Show QR code or redirect to checkout
-if (checkout_url) {
-  // Redirect to ABA checkout page
-  window.location.href = checkout_url;
-} else {
-  // Show QR code for scanning
-  showQRCode(qr_code, expires_at);
-  startPolling(transaction_id);
-}
-
-// 3. Poll for payment status
-async function pollStatus(transactionId: string) {
-  const interval = setInterval(async () => {
-    const res = await fetch('/api/check-khqr-status', {
-      method: 'POST',
-      body: JSON.stringify({ transaction_id: transactionId }),
-    });
-    const status = await res.json();
-    
-    if (status.status === 'PAID') {
-      clearInterval(interval);
-      showSuccess(status.license_key);
-    } else if (status.status === 'EXPIRED' || status.status === 'FAILED') {
-      clearInterval(interval);
-      showError(status.error);
-    }
-  }, 5000); // Poll every 5 seconds
-}
-```
-
-### QR Code Display Component
-
-```tsx
-function KHQRPayment({ transactionId, qrCode, expiresAt }) {
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(expiresAt));
-  const [status, setStatus] = useState('PENDING');
-
-  useEffect(() => {
-    // Update countdown
-    const timer = setInterval(() => {
-      const left = calculateTimeLeft(expiresAt);
-      setTimeLeft(left);
-      if (left <= 0) setStatus('EXPIRED');
-    }, 1000);
-
-    // Poll for payment status
-    const poller = setInterval(async () => {
-      const res = await checkStatus(transactionId);
-      if (res.status !== 'PENDING') {
-        setStatus(res.status);
-        clearInterval(poller);
-      }
-    }, 5000);
-
-    return () => {
-      clearInterval(timer);
-      clearInterval(poller);
-    };
-  }, [transactionId, expiresAt]);
-
-  return (
-    <div className="khqr-payment">
-      <img src={qrCode} alt="KHQR Code" />
-      <p>Scan with ABA Mobile or any KHQR-supported app</p>
-      <p>Time remaining: {formatTime(timeLeft)}</p>
-      {status === 'PAID' && <SuccessMessage />}
-      {status === 'EXPIRED' && <ExpiredMessage onRetry={regenerate} />}
-    </div>
-  );
-}
-```
+- [ ] Get production credentials from ABA Bank
+- [ ] Set `ABA_BASE_URL` to `https://checkout.payway.com.kh`
+- [ ] Set a real `ABA_WEBHOOK_SECRET` and register the webhook URL with ABA
+- [ ] Set `VITE_API_URL` in `apps/menu` to the public API address
+- [ ] Test with a small real payment
+- [ ] Watch the logs for `ABA createPurchase failed` and `ABA amount mismatch`
 
 ## Testing
 
-### Sandbox Testing
-
-1. Use the sandbox URL: `https://checkout-sandbox.payway.com.kh`
-2. Test credentials are pre-configured
-3. No real payments are processed
-
-### Test Commands
+Automated tests need no credentials and make no network calls:
 
 ```bash
-# Create KHQR payment
-curl -X POST "https://oaijcqvwehvbdvzzmeie.supabase.co/functions/v1/create-khqr" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "plan_type": "MONTHLY",
-    "currency": "USD",
-    "customer_email": "test@example.com"
-  }'
-
-# Check payment status
-curl -X POST "https://oaijcqvwehvbdvzzmeie.supabase.co/functions/v1/check-khqr-status" \
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id": "EAXXXXXXXXXX"}'
+cd packages/aba-payway-sdk-unofficial && npm test   # SDK
+cd apps/api && npm test                            # the three routes
 ```
 
-## Technical Details
+The route tests cover the security rules directly: unsigned webhooks, wrongly
+signed webhooks, short payments, and repeated webhooks.
 
-### Hash Generation Logic
-The ABA PayWay API requires an HMAC-SHA512 hash generated from a concatenation of **all parameters** in a specific order, signed with the Public Key (API Key).
-
-**Format:**
-```
-Hash = Base64( HMAC_SHA512( API_KEY, StringToSign ) )
-```
-
-**StringToSign Order:**
-1. `req_time`
-2. `merchant_id`
-3. `tran_id`
-4. `amount`
-5. `items` (Base64 encoded JSON string)
-6. `shipping`
-7. `ctid`
-8. `pwt`
-9. `firstname`
-10. `lastname`
-11. `email`
-12. `phone`
-13. `type`
-14. `payment_option`
-15. `return_url`
-16. `cancel_url`
-17. `continue_success_url`
-18. `return_deeplink`
-19. `currency`
-20. `custom_fields`
-21. `return_params`
-
-**Important Notes:**
-- All parameters must be included. If a parameter is empty/optional, use an empty string `""`.
-- `items` must be a Base64 encoded JSON string of the items array.
-- Current Timestamp (`req_time`) must be `YYYYMMDDHHmmss`.
-
-### Status Codes
-The API returns status codes that indicate the result of the request:
-- **`0`**: Success
-- **`"00"`**: Success (returned by some endpoints like `Purchase`)
-- **Non-zero**: Error (e.g., `1` = Wrong Hash, `11` = Invalid Merchant)
-
-### Production Checklist
-
-- [ ] Obtain production credentials from ABA Bank
-- [ ] Update `ABA_PAYWAY_BASE_URL` to `https://checkout.payway.com.kh`
-- [ ] Update `ABA_PAYWAY_MERCHANT_ID` with production merchant ID
-- [ ] Update `ABA_PAYWAY_API_KEY` with production API key
-- [ ] Configure webhook URL in ABA merchant dashboard
-- [ ] Test with real payments (small amounts)
-- [ ] Set up monitoring for failed payments
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"uses_fallback": true in response**
-   - **Cause:** The ABA API call failed (e.g., Wrong Hash, Connection Error).
-   - **Resolution:** Check Supabase logs. The API is designed to return a valid Deep Link and QR string.
-   - **Debugging:** Ensure `items` are Base64 encoded and the Hash string includes ALL parameters including empty ones.
-
-2. **Error: "Wrong Hash" (Code 1)**
-   - **Cause:** The generated hash does not match what ABA expects.
-   - **Resolution:** Verify the `StringToSign` order matches the list above EXACTLY. Ensure the API Key is correct.
-
-3. **Status always "PENDING"**
-   - **Cause:** Webhook not firing or Polling logic incorrect.
-   - **Resolution:** Use the `check-khqr-status` endpoint manually to verify.
-
-## Security Notes
-
-1. **API Key**: The public key is used for HMAC hash generation.
-2. **Webhook Verification**: All webhooks are verified using HMAC-SHA512 with the Webhook Secret.
-3. **Transaction IDs**: Generated server-side with timestamp + random to ensure uniqueness.
-4. **HTTPS Only**: All API calls use TLS 1.2+.
+For the live test, see `docs/ABA_SANDBOX_TESTING.md`.

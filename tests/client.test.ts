@@ -26,14 +26,17 @@ describe("ABAPayWay", () => {
   describe("createPurchase", () => {
     let fetchSpy: ReturnType<typeof vi.fn>;
     beforeEach(() => {
+      const payload = {
+        status: 0, description: "Success",
+        checkout_url: "https://checkout-sandbox.payway.com.kh/checkout/abc123",
+        abapay_deeplink: "abapay://pay?token=abc123",
+        qr_string: "00020101021229370016KHQR-MOCK-DATA",
+      };
       fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          status: 0, description: "Success",
-          checkout_url: "https://checkout-sandbox.payway.com.kh/checkout/abc123",
-          abapay_deeplink: "abapay://pay?token=abc123",
-          qr_string: "00020101021229370016KHQR-MOCK-DATA",
-        }),
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(payload)),
+        json: () => Promise.resolve(payload),
       });
       vi.stubGlobal("fetch", fetchSpy);
     });
@@ -51,6 +54,32 @@ describe("ABAPayWay", () => {
       expect(result.checkoutUrl).toContain("checkout");
     });
 
+    // ABA only returns qr_string / abapay_deeplink when payment_option asks
+    // for KHQR, and it expects items as base64 JSON.
+    it("sends payment_option and base64-encoded items", async () => {
+      const items = [{ name: "Milk Tea", quantity: 2, price: 2.5 }];
+      await aba.createPurchase({
+        transactionId: "EA003", amount: 5.0, currency: "USD",
+        items, paymentOption: "abapay_khqr",
+      });
+      const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+      expect(body.get("payment_option")).toBe("abapay_khqr");
+      expect(JSON.parse(atob(body.get("items")!))).toEqual(items);
+    });
+
+    // Bad credentials get an HTML error page back, not JSON. Parsing that
+    // blindly produced "Unexpected token '<'", which hides the real cause.
+    it("explains a non-JSON reply instead of leaking a parse error", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200,
+        text: () => Promise.resolve("<!DOCTYPE html><html><body>Forbidden</body></html>"),
+      });
+      const result = await aba.createPurchase({ transactionId: "EA004", amount: 1.0, currency: "USD" });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("non-JSON");
+      expect(result.error).toContain("merchant ID or API key");
+    });
+
     it("returns error when API fails", async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false, status: 500, text: () => Promise.resolve("Server error"),
@@ -64,9 +93,12 @@ describe("ABAPayWay", () => {
   describe("checkStatus", () => {
     let fetchSpy: ReturnType<typeof vi.fn>;
     beforeEach(() => {
+      const payload = { status: 0, description: "APPROVED", payment_status: "APPROVED", amount: "15.00" };
       fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ status: 0, description: "APPROVED", payment_status: "APPROVED", amount: "15.00" }),
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(payload)),
+        json: () => Promise.resolve(payload),
       });
       vi.stubGlobal("fetch", fetchSpy);
     });

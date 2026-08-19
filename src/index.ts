@@ -9,6 +9,7 @@ export {
 } from "./utils";
 export type {
   ABAConfig,
+  PurchaseItem,
   PurchaseRequest,
   PurchaseResponse,
   StatusResponse,

@@ -6,7 +6,27 @@ import type {
   PaymentStatus,
 } from "./types";
 import { generateABAHash } from "./hash";
-import { getABATimestamp, formatPhoneForABA } from "./utils";
+import { getABATimestamp, formatPhoneForABA, encodeItemsForABA } from "./utils";
+
+/**
+ * ABA does not always answer with JSON. Bad credentials get an HTML error page,
+ * and a gateway hiccup gets plain text. Parsing blindly turns those into
+ * "Unexpected token '<'", which tells the operator nothing about the real
+ * problem, so read the body as text and report what actually came back.
+ */
+async function parseAbaJson(response: Response): Promise<{ data?: any; error?: string }> {
+  const text = await response.text();
+  try {
+    return { data: JSON.parse(text) };
+  } catch {
+    const snippet = text.trim().slice(0, 200);
+    return {
+      error:
+        `ABA PayWay returned a non-JSON response (HTTP ${response.status}). ` +
+        `This usually means the merchant ID or API key is wrong. Response starts: ${snippet}`,
+    };
+  }
+}
 
 export class ABAPayWay {
   readonly config: Readonly<ABAConfig>;
@@ -21,13 +41,16 @@ export class ABAPayWay {
     const reqTime = getABATimestamp();
     const amount = request.amount.toFixed(2);
     const phone = request.phone ? formatPhoneForABA(request.phone) : "";
+    // Encode once. The hash and the body must carry the identical string or
+    // ABA rebuilds a different signature and rejects the request.
+    const items = encodeItemsForABA(request.items);
 
     const hashParams = {
       req_time: reqTime,
       merchant_id: this.config.merchantId,
       tran_id: request.transactionId,
       amount,
-      items: request.items ?? "",
+      items,
       shipping: "",
       ctid: "",
       pwt: "",
@@ -53,7 +76,7 @@ export class ABAPayWay {
       merchant_id: this.config.merchantId,
       tran_id: request.transactionId,
       amount,
-      items: request.items ?? "",
+      items,
       firstname: request.firstName ?? "",
       lastname: request.lastName ?? "",
       email: request.email ?? "",
@@ -89,7 +112,17 @@ export class ABAPayWay {
         };
       }
 
-      const data = await response.json();
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) {
+        return {
+          success: false,
+          transactionId: request.transactionId,
+          amount: request.amount,
+          currency: request.currency,
+          error: parsed.error,
+        };
+      }
+      const data = parsed.data;
 
       if (data.status !== 0) {
         return {
@@ -159,7 +192,11 @@ export class ABAPayWay {
         };
       }
 
-      const data = await response.json();
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) {
+        return { success: false, transactionId, status: "ERROR", error: parsed.error };
+      }
+      const data = parsed.data;
 
       if (data.status !== 0) {
         return {

@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   generateTransactionId,
   getABATimestamp,
   formatPhoneForABA,
   getQRExpiration,
+  toBase64Utf8,
+  encodeItemsForABA,
 } from "../src/utils";
 
 describe("generateTransactionId", () => {
@@ -23,8 +25,18 @@ describe("generateTransactionId", () => {
 });
 
 describe("getABATimestamp", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
   it("returns a 14-character YYYYMMDDHHmmss string", () => {
     expect(getABATimestamp()).toMatch(/^\d{14}$/);
+  });
+
+  // ABA rejects a req_time that looks stale. Reading the local clock made the
+  // timestamp wrong by the server's UTC offset — 7 hours in Cambodia.
+  it("uses UTC, not the local timezone", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-04T05:06:07Z"));
+    expect(getABATimestamp()).toBe("20260304050607");
   });
 });
 
@@ -43,6 +55,32 @@ describe("formatPhoneForABA", () => {
   });
   it("returns empty string for empty input", () => {
     expect(formatPhoneForABA("")).toBe("");
+  });
+});
+
+describe("toBase64Utf8", () => {
+  it("encodes plain ASCII", () => {
+    expect(toBase64Utf8("hello")).toBe("aGVsbG8=");
+  });
+  // btoa alone throws on anything outside Latin-1, and this shop's menu is
+  // partly Khmer and Chinese.
+  it("encodes non-Latin text without throwing", () => {
+    expect(() => toBase64Utf8("តែទឹកដោះគោ 珍珠奶茶")).not.toThrow();
+    expect(toBase64Utf8("珍珠")).toBe("54+N54+g");
+  });
+});
+
+describe("encodeItemsForABA", () => {
+  it("base64-encodes an items array as JSON", () => {
+    const items = [{ name: "Milk Tea", quantity: 2, price: 2.5 }];
+    const encoded = encodeItemsForABA(items);
+    expect(JSON.parse(atob(encoded))).toEqual(items);
+  });
+  it("passes a string through unchanged", () => {
+    expect(encodeItemsForABA("already-encoded")).toBe("already-encoded");
+  });
+  it("returns an empty string when items are missing", () => {
+    expect(encodeItemsForABA(undefined)).toBe("");
   });
 });
 

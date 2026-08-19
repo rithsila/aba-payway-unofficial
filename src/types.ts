@@ -5,11 +5,22 @@ export interface ABAConfig {
   readonly webhookSecret?: string;
 }
 
+export interface PurchaseItem {
+  readonly name: string;
+  readonly quantity: number;
+  readonly price: number;
+}
+
 export interface PurchaseRequest {
   readonly transactionId: string;
   readonly amount: number;
   readonly currency: "USD" | "KHR";
-  readonly items?: string;
+  /**
+   * ABA expects `items` as a base64-encoded JSON array. Pass an array and the
+   * SDK encodes it for you; pass a string and it is sent through untouched
+   * (assumed already encoded, or a plain label).
+   */
+  readonly items?: string | readonly PurchaseItem[];
   readonly firstName?: string;
   readonly lastName?: string;
   readonly email?: string;
