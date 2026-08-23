@@ -1,0 +1,32 @@
+---
+title: Checking Status
+description: Polling and querying transaction payment state
+---
+
+Query the status of any transaction using `checkStatus()`:
+
+```typescript
+const response = await aba.checkStatus("TXN_1740001");
+
+if (response.success) {
+  console.log("Status:", response.status);
+  console.log("Paid Amount:", response.amount);
+  console.log("Payment Time:", response.paymentTime);
+} else {
+  console.error("Query failed:", response.error);
+}
+```
+
+---
+
+## Possible Payment Statuses
+
+| Status | Description |
+| :--- | :--- |
+| `APPROVED` | Payment completed successfully. |
+| `PENDING` | Awaiting customer action / payment. |
+| `PRE-AUTH` | Pre-authorized hold on funds. |
+| `DECLINED` | Payment declined by card issuer or bank. |
+| `CANCELLED` | Customer or merchant cancelled transaction. |
+| `REFUNDED` | Transaction was refunded. |
+| `ERROR` | Could not query status or API error occurred. |
