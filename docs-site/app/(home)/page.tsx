@@ -217,7 +217,7 @@ export default function HomePage() {
             <span>→</span>
           </Link>
           <a
-            href="https://github.com/rithsila/aba-payway-sdk-unofficial"
+            href="https://github.com/rithsila/aba-payway-unofficial"
             target="_blank"
             rel="noreferrer"
             className="btn-secondary"
