@@ -1,0 +1,48 @@
+---
+title: Creating Purchases
+description: Initiating transactions, web checkout, and deeplinks
+---
+
+Use `createPurchase()` to create an online checkout transaction.
+
+```typescript
+const result = await aba.createPurchase({
+  transactionId: "TXN_1740001",
+  amount: 15.50,
+  currency: "USD",
+  items: "Order #9921",
+  firstName: "Rith",
+  lastName: "Sila",
+  email: "rith@example.com",
+  phone: "012345678",
+  returnUrl: "https://myshop.com/orders/success",
+  cancelUrl: "https://myshop.com/orders/cancel",
+});
+```
+
+---
+
+## Currency and Amount Rules
+
+The SDK automatically formats amount values according to ABA rules:
+
+- **USD (`USD`)**: Formatted to two decimal places (`15.5` → `15.50`).
+- **KHR (`KHR`)**: Formatted to whole integers (`40000.25` → `40000`).
+
+---
+
+## Return Values (`PurchaseResponse`)
+
+```typescript
+interface PurchaseResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly checkoutUrl?: string;     // Web checkout redirect URL
+  readonly abapayDeeplink?: string;  // ABA mobile app deeplink
+  readonly qrString?: string;        // Raw EMV QR string for KHQR
+  readonly amount: number;
+  readonly currency: string;
+  readonly error?: string;
+  readonly errorCode?: string;
+}
+```

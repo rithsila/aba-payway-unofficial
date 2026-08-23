@@ -1,0 +1,34 @@
+---
+title: API Reference
+description: Complete listing of exports, classes, and types
+---
+
+## Exported Classes and Functions
+
+### `ABAPayWay`
+Main SDK client class.
+
+- `constructor(config: ABAConfig)`
+- `createPurchase(request: PurchaseRequest): Promise<PurchaseResponse>`
+- `checkStatus(transactionId: string): Promise<StatusResponse>`
+- `verifyWebhook(payload: string, signature: string, secret: string): Promise<boolean>`
+
+---
+
+### Utility Functions
+
+```typescript
+import {
+  generateTransactionId,
+  getABATimestamp,
+  formatPhoneForABA,
+  getQRExpiration,
+  generateABAHash,
+} from "aba-payway-sdk-unofficial";
+```
+
+- `generateTransactionId(): string`: Generates a random, unique alphanumeric ID prefixed with `EA` (up to 20 characters).
+- `getABATimestamp(): string`: Formats current date/time to `YYYYMMDDHHmmss` string for ABA request timestamps.
+- `formatPhoneForABA(phone: string): string`: Converts phone numbers into standard Cambodian domestic 0-prefix format (e.g. `+855123456` → `0123456`).
+- `getQRExpiration(): Date`: Returns a Date object 15 minutes into the future.
+- `generateABAHash(params: HashParams, apiKey: string): Promise<string>`: Computes base64 HMAC-SHA512 hash in ABA's required parameter sequence.

@@ -1,0 +1,46 @@
+---
+title: KHQR Generation
+description: Generating customized SVG KHQR payment cards
+---
+
+Generate branded, self-contained SVG cards embedding the EMV QR string:
+
+```typescript
+import { generateKHQR } from "aba-payway-sdk-unofficial";
+
+const svgDataUri = await generateKHQR({
+  emvData: purchase.qrString!, // from createPurchase()
+  amount: 25.00,
+  currency: "USD",
+  merchantName: "My Shop Cambodia",
+  headerColor: "#e63946", // Custom header banner color
+});
+
+// Returns: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0..."
+```
+
+---
+
+## Render in HTML or React
+
+You can pass the returned Data URI directly to any standard `<img>` tag:
+
+```jsx
+<img
+  src={svgDataUri}
+  alt="Scan to pay with KHQR"
+  className="w-full max-w-sm rounded-xl shadow-lg"
+/>
+```
+
+---
+
+## Options (`KHQROptions`)
+
+| Option | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `emvData` | `string` | Yes | EMV QR data string from ABA API. |
+| `amount` | `number` | Yes | Amount shown on the QR card. |
+| `currency` | `"USD" \| "KHR"` | Yes | Currency code. |
+| `merchantName` | `string` | Yes | Merchant name displayed in card header. |
+| `headerColor` | `string` | No | Header hex/CSS color (default: `#e63946`). |

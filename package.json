@@ -8,9 +8,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -21,6 +21,7 @@
     "test": "vitest run --exclude '**/integration/**'",
     "test:watch": "vitest",
     "test:sandbox": "vitest run tests/integration",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -33,6 +34,14 @@
     "qr"
   ],
   "author": "rithsila",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rithsila/aba-payway-sdk-unofficial.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rithsila/aba-payway-sdk-unofficial/issues"
+  },
+  "homepage": "https://github.com/rithsila/aba-payway-sdk-unofficial#readme",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"

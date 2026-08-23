@@ -1,0 +1,42 @@
+---
+title: Configuration
+description: Client options, endpoints, and credentials setup
+---
+
+Initialize `ABAPayWay` by passing an `ABAConfig` object:
+
+```typescript
+import { ABAPayWay, type ABAConfig } from "aba-payway-sdk-unofficial";
+
+const config: ABAConfig = {
+  merchantId: "ec460802",
+  apiKey: "your_api_key_here",
+  baseUrl: "https://checkout-sandbox.payway.com.kh",
+  webhookSecret: "your_webhook_secret", // optional
+};
+
+const aba = new ABAPayWay(config);
+```
+
+---
+
+## Configuration Properties
+
+| Option | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `merchantId` | `string` | Yes | Your assigned merchant ID from ABA Bank. |
+| `apiKey` | `string` | Yes | Public/Private API key used for HMAC-SHA512 request signing. |
+| `baseUrl` | `string` | Yes | Gateway base URL. |
+| `webhookSecret`| `string` | No | Secret used to verify incoming pushback notifications. |
+
+---
+
+## Environments
+
+### Sandbox Environment (Testing)
+- Base URL: `https://checkout-sandbox.payway.com.kh`
+- Registration: [Register ABA Sandbox](https://sandbox.payway.com.kh/register-sandbox/)
+
+### Production Environment (Live)
+- Base URL: `https://checkout.payway.com.kh`
+- Contact ABA Bank Merchant Acquisition to get live credentials.
