@@ -3,6 +3,6 @@ export const docsRoute = '/docs';
 
 export const gitConfig = {
   user: 'rithsila',
-  repo: 'aba-payway-sdk-unofficial',
+  repo: 'aba-payway-unofficial',
   branch: 'main',
 };

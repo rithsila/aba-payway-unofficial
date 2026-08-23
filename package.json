@@ -36,12 +36,12 @@
   "author": "rithsila",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rithsila/aba-payway-sdk-unofficial.git"
+    "url": "git+https://github.com/rithsila/aba-payway-unofficial.git"
   },
   "bugs": {
-    "url": "https://github.com/rithsila/aba-payway-sdk-unofficial/issues"
+    "url": "https://github.com/rithsila/aba-payway-unofficial/issues"
   },
-  "homepage": "https://github.com/rithsila/aba-payway-sdk-unofficial#readme",
+  "homepage": "https://github.com/rithsila/aba-payway-unofficial#readme",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
