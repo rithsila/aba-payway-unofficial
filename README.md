@@ -16,6 +16,16 @@ Unofficial ABA PayWay SDK for Cambodia. Supports KHQR generation, purchase creat
 
 ---
 
+## 🤖 For LLM Agents
+
+Fetch the full integration guide and follow it step by step:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rithsila/aba-payway-sdk-unofficial/main/docs/agent-guide.md
+```
+
+---
+
 ## Installation
 
 ```bash
