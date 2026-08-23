@@ -2,9 +2,17 @@
 
 ![npm version](https://img.shields.io/npm/v/aba-payway-sdk-unofficial)
 
-Unofficial ABA PayWay SDK for Cambodia. Supports KHQR generation, purchase creation, status checking, and webhook verification. Works in Node.js 18+ and Deno.
+Unofficial ABA PayWay SDK for Cambodia. Supports KHQR generation, purchase creation, status checking, and webhook verification. Works in Node.js 18+, Deno, Bun, and Cloudflare Workers.
 
-> **Disclaimer**: This is an unofficial SDK. It is not affiliated with, endorsed by, or supported by ABA Bank or ABA PayWay.
+> **Why this project exists**: Online guides for ABA PayWay can look confusing and risky. Many developers fear losing money from wrong setups. We built this simple SDK with AI help so any developer can integrate ABA PayWay quickly and safely.
+
+## Official ABA PayWay Links
+- **Official Developer Docs**: [https://developer.payway.com.kh/](https://developer.payway.com.kh/)
+- **Register Free Sandbox (Testing Account)**: [https://sandbox.payway.com.kh/register-sandbox/](https://sandbox.payway.com.kh/register-sandbox/)
+- **ABA PayWay Business & Pricing**: [https://www.payway.com.kh/business](https://www.payway.com.kh/business)
+- **NBC Bakong API Docs**: [https://api-bakong.nbc.gov.kh/document](https://api-bakong.nbc.gov.kh/document)
+
+> **Disclaimer**: This is an unofficial open-source SDK. It is not affiliated with, endorsed by, or supported by ABA Bank or ABA PayWay.
 
 ---
 
