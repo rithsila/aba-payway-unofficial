@@ -30,7 +30,15 @@ export async function POST(req: Request) {
 
 ---
 
+## Official ABA Documentation Reference
+
+- **ABA Pushback Notification (Webhooks)**: [https://developer.payway.com.kh/ecommerce-checkout-3158159f0](https://developer.payway.com.kh/ecommerce-checkout-3158159f0)
+- **ABA Security & HMAC-SHA512 Verification**: [https://developer.payway.com.kh/api-endpoints-984508m0](https://developer.payway.com.kh/api-endpoints-984508m0)
+
+---
+
 ## Security Details
 
 - The verification uses **constant-time byte comparison** (`^` XOR accumulator) to ensure resilience against side-channel timing attacks.
 - JSON keys are automatically sorted alphabetically (`ksort`) before calculating the HMAC-SHA512 hash, matching ABA's exact pushback algorithm.
+

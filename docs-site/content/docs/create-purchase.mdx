@@ -3,7 +3,7 @@ title: Creating Purchases
 description: Initiating transactions, web checkout, and deeplinks
 ---
 
-Use `createPurchase()` to create an online checkout transaction.
+Use `createPurchase()` to initiate an online checkout transaction.
 
 ```typescript
 const result = await aba.createPurchase({
@@ -19,6 +19,13 @@ const result = await aba.createPurchase({
   cancelUrl: "https://myshop.com/orders/cancel",
 });
 ```
+
+---
+
+## Official ABA Documentation Reference
+
+- **ABA Purchase Endpoint API**: [https://developer.payway.com.kh/purchase-14530820e0](https://developer.payway.com.kh/purchase-14530820e0)
+- **ABA Payment Link Endpoint**: [https://developer.payway.com.kh/create-payment-link-14530837e0](https://developer.payway.com.kh/create-payment-link-14530837e0)
 
 ---
 
@@ -46,3 +53,4 @@ interface PurchaseResponse {
   readonly errorCode?: string;
 }
 ```
+
