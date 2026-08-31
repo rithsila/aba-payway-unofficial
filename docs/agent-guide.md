@@ -6,18 +6,64 @@ You are an AI coding assistant tasked with integrating `aba-payway-sdk-unofficia
 
 ## Step 1: Detect Project Stack
 
-1. Check `package.json` dependencies:
-   - **Next.js (App Router)**: has `next` and `app/` folder -> Create route in `app/api/payway/.../route.ts`
-   - **Next.js (Pages Router)**: has `next` and `pages/` folder -> Create route in `pages/api/payway/...ts`
-   - **Express**: has `express` -> Create router or add endpoints to server file
-   - **Hono / Cloudflare**: has `hono` -> Create Hono route handler
-   - **NestJS**: has `@nestjs/core` -> Create a PayWay service and controller
+Don't stop at dependency names in `package.json` — look at the actual folder
+layout and how an existing route/controller in the project is written, and
+match its conventions. Only fall back to a default pattern once you're
+confident there's nothing existing to match.
+
+### A. JavaScript/TypeScript backend present
+
+1. Check `package.json` (or `deno.json`/`deno.jsonc`) and folder layout:
+   - **Next.js (App Router)**: has `next` and an `app/` folder -> route in `app/api/payway/.../route.ts`
+   - **Next.js (Pages Router)**: has `next` and a `pages/` folder (no `app/`) -> route in `pages/api/payway/...ts`
+   - **Express**: has `express` -> add a router/endpoint the same way other routes in the project are registered
+   - **Fastify**: has `fastify` -> register a route/plugin matching the existing plugin structure
+   - **Koa**: has `koa` -> add a route via the existing `koa-router`/`@koa/router` if one is set up
+   - **Hono / Cloudflare Workers**: has `hono`, or a `wrangler.toml` is present -> Hono route handler
+   - **NestJS**: has `@nestjs/core` -> a `PaywayModule` with a service + controller, matching existing module structure
+   - **SvelteKit**: has `@sveltejs/kit` -> `+server.ts` route under `src/routes/api/payway/...`
+   - **Nuxt**: has `nuxt` -> server route under `server/api/payway/...`
+   - **Remix**: has `@remix-run/*` -> resource route under `app/routes/api.payway.*.ts`
+   - **Astro**: has `astro` -> API route under `src/pages/api/payway/...`
+   - **Plain Node.js (no framework)**: only `http`/`https`, no framework dependency -> add a branch to the existing request handler, or a small handler function the app already calls into
+   - **Deno**: `deno.json`/`deno.jsonc` present, no `package.json` -> import via `npm:aba-payway-sdk-unofficial`, add a route to the existing `Deno.serve` (or Oak/Fresh/Hono) handler
+   - **Bun-native (no framework)**: a `Bun.serve` entrypoint, `bun.lockb`/`bun.lock`, and none of the frameworks above -> add a route to that `Bun.serve` handler
+
+   If nothing above matches confidently, ask which file handles HTTP routes
+   before generating anything — don't invent a framework that isn't there.
 
 2. Detect package manager:
    - `bun.lockb` or `bun.lock` -> `bun add aba-payway-sdk-unofficial`
    - `pnpm-lock.yaml` -> `pnpm add aba-payway-sdk-unofficial`
    - `yarn.lock` -> `yarn add aba-payway-sdk-unofficial`
    - Default -> `npm install aba-payway-sdk-unofficial`
+
+### B. Non-JS/TS backend (Python, Go, PHP, Java, Ruby, etc.)
+
+This SDK is a TypeScript/JavaScript package — it only runs in a JS/TS runtime
+(Node 18+, Deno, Bun, Cloudflare Workers) and cannot be imported directly into
+a Python/Go/PHP/Java/Ruby codebase.
+
+For these stacks, scaffold a small standalone Node (or Deno) service that
+wraps the SDK and exposes plain HTTP endpoints, and have the main app call it
+over HTTP instead of importing the SDK directly:
+
+1. Create a minimal sidecar (or a single serverless function, if the project
+   already deploys to Vercel/Cloudflare/Lambda):
+   ```bash
+   mkdir payway-service && cd payway-service
+   npm init -y
+   npm install aba-payway-sdk-unofficial express
+   ```
+2. Expose endpoints that mirror the SDK methods 1:1 — `POST /create-payment`,
+   `POST /check-status`, `POST /verify-webhook` — using the same Express
+   pattern as Step 5 below.
+3. Point the existing backend at this sidecar with a plain HTTP client
+   (`requests` in Python, `net/http` in Go, Guzzle in PHP, etc.) instead of
+   reimplementing the signing logic.
+4. Never reimplement `generateABAHash` in another language for this
+   integration — exact parameter order matters, and getting it subtly wrong
+   is exactly the kind of bug this SDK exists to prevent.
 
 ---
 
