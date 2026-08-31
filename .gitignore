@@ -4,3 +4,4 @@ dist/
 *.tgz
 credential_info.txt
 .DS_Store
+qr-code.png

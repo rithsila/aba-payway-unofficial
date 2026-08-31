@@ -21,6 +21,8 @@
     "test": "vitest run --exclude '**/integration/**'",
     "test:watch": "vitest",
     "test:sandbox": "vitest run tests/integration",
+    "verify:credentials": "vite-node scripts/verify-credentials.mts",
+    "see:qr": "vite-node scripts/see-qr-code.mts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },

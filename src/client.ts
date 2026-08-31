@@ -6,6 +6,7 @@ import type {
   PaymentStatus,
 } from "./types";
 import { generateABAHash } from "./hash";
+import { readAbaStatus } from "./response";
 import { getABATimestamp, formatPhoneForABA, encodeItemsForABA } from "./utils";
 
 /**
@@ -20,12 +21,29 @@ async function parseAbaJson(response: Response): Promise<{ data?: any; error?: s
     return { data: JSON.parse(text) };
   } catch {
     const snippet = text.trim().slice(0, 200);
-    return {
-      error:
-        `ABA PayWay returned a non-JSON response (HTTP ${response.status}). ` +
-        `This usually means the merchant ID or API key is wrong. Response starts: ${snippet}`,
-    };
+    // A wrong merchant_id makes ABA render the checkout page instead of
+    // answering the API, so HTML here almost always means bad credentials.
+    if (response.ok) {
+      return {
+        error:
+          `ABA PayWay returned a non-JSON response (HTTP ${response.status}). ` +
+          `This usually means the merchant ID or API key is wrong. Response starts: ${snippet}`,
+      };
+    }
+    return { error: `HTTP ${response.status}: ${snippet}` };
   }
+}
+
+/**
+ * ABA hands merchants the full purchase URL ("API Url" on the credential
+ * sheet), but the SDK builds endpoint paths itself. Accept either and keep
+ * only the origin so pasting the sheet value verbatim works.
+ */
+function normalizeBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  const marker = "/api/payment-gateway";
+  const at = trimmed.indexOf(marker);
+  return at === -1 ? trimmed : trimmed.slice(0, at);
 }
 
 export class ABAPayWay {
@@ -34,7 +52,8 @@ export class ABAPayWay {
   constructor(config: ABAConfig) {
     if (!config.merchantId) throw new Error("merchantId is required");
     if (!config.apiKey) throw new Error("apiKey is required");
-    this.config = Object.freeze({ ...config });
+    if (!config.baseUrl) throw new Error("baseUrl is required");
+    this.config = Object.freeze({ ...config, baseUrl: normalizeBaseUrl(config.baseUrl) });
   }
 
   async createPurchase(request: PurchaseRequest): Promise<PurchaseResponse> {
@@ -94,6 +113,15 @@ export class ABAPayWay {
 
     const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/purchase`;
 
+    const failure = (error: string, errorCode?: string): PurchaseResponse => ({
+      success: false,
+      transactionId: request.transactionId,
+      amount: request.amount,
+      currency: request.currency,
+      error,
+      errorCode,
+    });
+
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -101,39 +129,16 @@ export class ABAPayWay {
         body: body.toString(),
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        return {
-          success: false,
-          transactionId: request.transactionId,
-          amount: request.amount,
-          currency: request.currency,
-          error: `HTTP ${response.status}: ${text}`,
-        };
-      }
-
+      // A rejected request comes back as HTTP 403 with the reason in a JSON
+      // status envelope ("Wrong Hash.", "End of API lifetime"). Parse it
+      // rather than dumping the raw body, so callers get a real error code.
       const parsed = await parseAbaJson(response);
-      if (parsed.error) {
-        return {
-          success: false,
-          transactionId: request.transactionId,
-          amount: request.amount,
-          currency: request.currency,
-          error: parsed.error,
-        };
-      }
-      const data = parsed.data;
+      if (parsed.error) return failure(parsed.error);
 
-      if (data.status !== 0) {
-        return {
-          success: false,
-          transactionId: request.transactionId,
-          amount: request.amount,
-          currency: request.currency,
-          error: data.description ?? "Unknown error",
-          errorCode: String(data.status),
-        };
-      }
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) return failure(status.message, status.code || undefined);
+
+      const data = parsed.data;
 
       return {
         success: true,
@@ -142,16 +147,12 @@ export class ABAPayWay {
         currency: request.currency,
         checkoutUrl: data.checkout_url,
         abapayDeeplink: data.abapay_deeplink,
-        qrString: data.qr_string,
+        // v3 answers in camelCase; the older API used snake_case.
+        qrString: data.qrString ?? data.qr_string,
+        qrImage: data.qrImage ?? data.qr_image,
       };
     } catch (err) {
-      return {
-        success: false,
-        transactionId: request.transactionId,
-        amount: request.amount,
-        currency: request.currency,
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failure(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
@@ -175,6 +176,14 @@ export class ABAPayWay {
 
     const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/check-transaction-2`;
 
+    const failure = (error: string, errorCode?: string): StatusResponse => ({
+      success: false,
+      transactionId,
+      status: "ERROR",
+      error,
+      errorCode,
+    });
+
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -182,48 +191,30 @@ export class ABAPayWay {
         body: body.toString(),
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        return {
-          success: false,
-          transactionId,
-          status: "ERROR",
-          error: `HTTP ${response.status}: ${text}`,
-        };
-      }
-
       const parsed = await parseAbaJson(response);
-      if (parsed.error) {
-        return { success: false, transactionId, status: "ERROR", error: parsed.error };
-      }
-      const data = parsed.data;
+      if (parsed.error) return failure(parsed.error);
 
-      if (data.status !== 0) {
-        return {
-          success: false,
-          transactionId,
-          status: "ERROR",
-          error: data.description ?? "Unknown error",
-        };
-      }
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) return failure(status.message, status.code || undefined);
 
-      const paymentStatus = mapPaymentStatus(data.payment_status ?? data.description);
+      // v3 nests the transaction detail under `data`; the legacy shape put
+      // these fields at the top level.
+      const detail = parsed.data.data ?? parsed.data;
+
+      const amount = toNumber(detail.total_amount ?? detail.amount);
+      // `payment_currency` is an empty string until the payment settles.
+      const currency = firstNonEmpty(detail.payment_currency, detail.currency);
 
       return {
         success: true,
         transactionId,
-        status: paymentStatus,
-        amount: data.amount != null ? parseFloat(data.amount) : undefined,
-        currency: data.currency,
-        paymentTime: data.payment_datetime,
+        status: mapPaymentStatus(detail.payment_status ?? detail.description),
+        amount,
+        currency,
+        paymentTime: firstNonEmpty(detail.transaction_date, detail.payment_datetime),
       };
     } catch (err) {
-      return {
-        success: false,
-        transactionId,
-        status: "ERROR",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failure(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
@@ -256,6 +247,22 @@ export class ABAPayWay {
       return false;
     }
   }
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+}
+
+function firstNonEmpty(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return undefined;
 }
 
 function mapPaymentStatus(raw: string | undefined): PaymentStatus {

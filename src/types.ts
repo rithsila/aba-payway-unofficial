@@ -40,6 +40,12 @@ export interface PurchaseResponse {
   readonly checkoutUrl?: string;
   readonly abapayDeeplink?: string;
   readonly qrString?: string;
+  /**
+   * QR code as a PNG data URI, rendered by ABA. Present on the v3 API, so
+   * KHQR display needs no extra call — `generateKHQR` remains for callers
+   * who want the styled card instead.
+   */
+  readonly qrImage?: string;
   readonly amount: number;
   readonly currency: string;
   readonly expiresAt?: string;
@@ -62,6 +68,8 @@ export interface StatusResponse {
   readonly currency?: string;
   readonly paymentTime?: string;
   readonly error?: string;
+  /** ABA status code when the call failed, e.g. "6" (unknown tran_id), "21" (expired key). */
+  readonly errorCode?: string;
 }
 
 export interface KHQROptions {
