@@ -35,11 +35,13 @@ npm install aba-payway-sdk-unofficial
 Check if `.env` (or `.env.local`) exists. Add these variables if missing:
 
 ```env
-ABA_PAYWAY_MERCHANT_ID="your_merchant_id"
-ABA_PAYWAY_API_KEY="your_api_key"
-ABA_PAYWAY_BASE_URL="https://checkout.payway.com.kh" # or sandbox: https://checkout-sandbox.payway.com.kh
-ABA_PAYWAY_WEBHOOK_SECRET="your_optional_secret"
+ABA_MERCHANT_ID="your_merchant_id"
+ABA_API_KEY="your_public_key"
+ABA_BASE_URL="https://checkout.payway.com.kh" # or sandbox: https://checkout-sandbox.payway.com.kh
 ```
+
+Do not add a webhook secret variable — ABA does not issue one. If you find
+one in an older example, drop it.
 
 ---
 
@@ -51,10 +53,9 @@ Create a singleton helper (e.g. `lib/payway.ts` or `src/lib/payway.ts`):
 import { ABAPayWay } from "aba-payway-sdk-unofficial";
 
 export const abaPayWay = new ABAPayWay({
-  merchantId: process.env.ABA_PAYWAY_MERCHANT_ID!,
-  apiKey: process.env.ABA_PAYWAY_API_KEY!,
-  baseUrl: process.env.ABA_PAYWAY_BASE_URL || "https://checkout.payway.com.kh",
-  // No webhookSecret: ABA does not issue one, and the field is unused.
+  merchantId: process.env.ABA_MERCHANT_ID!,
+  apiKey: process.env.ABA_API_KEY!,
+  baseUrl: process.env.ABA_BASE_URL || "https://checkout.payway.com.kh",
 });
 ```
 
@@ -94,6 +95,11 @@ export async function POST(req: Request) {
 }
 ```
 
+On the frontend, check `purchase.success` first. Then prefer `purchase.qrImage`
+(a ready-to-render PNG data URI) or `purchase.qrString` — ABA's current API
+does not reliably return `purchase.checkoutUrl`, so don't build a flow that
+assumes it's always there.
+
 ### B. Express.js (`src/routes/payment.ts`)
 ```typescript
 import { Router } from "express";
@@ -126,7 +132,11 @@ router.post("/api/payway/create-payment", async (req, res) => {
 export default router;
 ```
 
-### C. KHQR Dynamic QR Generation (`app/api/payway/create-qr/route.ts` or Express)
+### C. KHQR-Only Purchase (`app/api/payway/create-qr/route.ts` or Express)
+
+There is no separate "create QR" method — pass `paymentOption: "abapay_khqr"`
+to the same `createPurchase()` call to get a KHQR-focused response:
+
 ```typescript
 import { NextResponse } from "next/server";
 import { abaPayWay } from "@/lib/payway";
@@ -137,13 +147,15 @@ export async function POST(req: Request) {
     const body = await req.json();
     const txnId = generateTransactionId();
 
-    const qrResult = await abaPayWay.createDynamicKHQR({
+    const qrResult = await abaPayWay.createPurchase({
       transactionId: txnId,
       amount: body.amount,
       currency: body.currency || "USD",
-      lifetime: 15, // QR valid for 15 minutes
+      items: body.items || "Order Payment",
+      paymentOption: "abapay_khqr",
     });
 
+    // qrResult.qrImage is a PNG data URI, ready for <img src>.
     return NextResponse.json(qrResult);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -164,7 +176,7 @@ import { abaPayWay } from "@/lib/payway";
 export async function POST(req: Request) {
   try {
     const { transactionId } = await req.json();
-    const status = await abaPayWay.checkTransaction(transactionId);
+    const status = await abaPayWay.checkStatus(transactionId);
     return NextResponse.json(status);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -172,10 +184,17 @@ export async function POST(req: Request) {
 }
 ```
 
+If `status.success` is `false`, `status.errorCode` tells you why — `"6"`
+means the transaction isn't found yet (a brand-new one can take about a
+second to become queryable; retry once), `"21"` means the API key expired.
+
 ---
 
 ## Step 7: Final Check
 
 1. Verify environment variables are loaded properly.
 2. Ensure TypeScript types compile without errors (`npm run build` or `npx tsc --noEmit`).
-3. Never expose `ABA_PAYWAY_API_KEY` to the client/browser bundle.
+3. Never expose `ABA_API_KEY` to the client/browser bundle.
+4. Only call methods that actually exist on `ABAPayWay`: `createPurchase`,
+   `checkStatus`, `verifyWebhook`. Don't invent method names — if unsure,
+   check `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
