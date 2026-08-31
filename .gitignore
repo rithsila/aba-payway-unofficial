@@ -5,3 +5,4 @@ dist/
 credential_info.txt
 .DS_Store
 qr-code.png
+khqr-preview.svg

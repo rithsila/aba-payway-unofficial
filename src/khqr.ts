@@ -35,21 +35,12 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
     if (qrResponse.ok) qrSvgContent = await qrResponse.text();
   } catch { /* fallback: empty QR area */ }
 
-  // quickchart draws the QR in a small module grid (e.g. viewBox="0 0 23
-  // 23") and relies on its own width/height="280" to scale it up. Stripping
-  // that outer <svg> loses the scale, so the modules must be re-wrapped in
-  // a nested <svg> that carries the original viewBox at our target size —
-  // otherwise the QR renders at its native tiny size instead of filling
-  // the frame.
-  const qrViewBoxMatch = qrSvgContent.match(/viewBox="([^"]*)"/);
-  const qrViewBox = qrViewBoxMatch ? qrViewBoxMatch[1] : "0 0 280 280";
-  const innerQrBody = qrSvgContent
-    .replace(/<\?xml[^>]*\?>/g, "")
-    .replace(/<svg[^>]*>/g, "")
-    .replace(/<\/svg>/g, "");
-  const innerQr = innerQrBody
-    ? `<svg width="280" height="280" viewBox="${qrViewBox}">${innerQrBody}</svg>`
-    : "";
+  // Keep the fetched QR's own <svg> wrapper intact (only strip a leading XML
+  // declaration) — quickchart draws the QR modules in a small unit grid (e.g.
+  // viewBox="0 0 43 43") and relies on its own width/height="280" to scale
+  // that up. Stripping the wrapper loses that scale, rendering the QR at
+  // native module size (a few percent of the intended 280px).
+  const innerQr = qrSvgContent.replace(/<\?xml[^>]*\?>/g, "");
 
   const formattedAmount = formatAmount(amount, currency);
   const safeMerchantName = escapeXml(merchantName);
@@ -79,7 +70,7 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
   </g>
   <g clip-path="url(#qr-clip)">
     <g transform="translate(60,160)">
-      ${innerQr || '<rect width="280" height="280" fill="#f5f5f5"/><text x="140" y="140" text-anchor="middle" fill="#999" font-size="14">QR Code</text>'}
+      ${innerQr || '<svg width="280" height="280"><rect width="280" height="280" fill="#f5f5f5"/><text x="140" y="140" text-anchor="middle" fill="#999" font-size="14">QR Code</text></svg>'}
     </g>
   </g>
   <text x="200" y="480" text-anchor="middle" fill="#666" font-family="system-ui,sans-serif" font-size="11">Scan with any KHQR-compatible app</text>
