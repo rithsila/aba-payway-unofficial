@@ -6,10 +6,14 @@ export {
   getABATimestamp,
   formatPhoneForABA,
   getQRExpiration,
+  encodeItemsForABA,
+  encodeReturnDeeplinkForABA,
 } from "./utils";
 export type {
   ABAConfig,
   PurchaseItem,
+  PaymentOption,
+  ReturnDeeplink,
   PurchaseRequest,
   PurchaseResponse,
   StatusResponse,

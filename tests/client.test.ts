@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ABAPayWay } from "../src/client";
+import { generateABAHash } from "../src/hash";
 
 const TEST_CONFIG = {
   merchantId: "TEST_MERCHANT",
@@ -49,7 +50,9 @@ describe("ABAPayWay", () => {
       const payload = {
         qrString: "00020101021229370016KHQR-MOCK-DATA",
         qrImage: "data:image/png;base64,iVBORw0KGgo=",
-        abapay_deeplink: "abapay://pay?token=abc123",
+        abapay_deeplink: "abamobilebank://plugin?data=abc123",
+        app_store: "https://itunes.apple.com/al/app/aba-mobile-bank/id968860649?mt=8",
+        play_store: "https://play.google.com/store/apps/details?id=com.paygo24.ibank",
         checkout_url: "https://checkout-sandbox.payway.com.kh/checkout/abc123",
         description: "success",
         status: { version: "v3", code: "00", message: "Success!", tran_id: "EA001" },
@@ -129,6 +132,62 @@ describe("ABAPayWay", () => {
       const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
       expect(body.get("payment_option")).toBe("abapay_khqr");
       expect(JSON.parse(atob(body.get("items")!))).toEqual(items);
+    });
+
+    // The deeplink flow is what a mobile/mini-app checkout uses: ABA answers
+    // with a link that opens ABA Mobile straight on this payment, plus store
+    // links to fall back to when the app is not installed.
+    it("reads abapayDeeplink and the store links from the deeplink flow", async () => {
+      const result = await aba.createPurchase({
+        transactionId: "EA010", amount: 4.5, currency: "USD",
+        paymentOption: "abapay_khqr_deeplink",
+      });
+      expect(result.abapayDeeplink).toBe("abamobilebank://plugin?data=abc123");
+      expect(result.appStoreUrl).toContain("itunes.apple.com");
+      expect(result.playStoreUrl).toContain("play.google.com");
+      const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+      expect(body.get("payment_option")).toBe("abapay_khqr_deeplink");
+    });
+
+    // ABA wants return_deeplink as base64 JSON. Sending the raw object (or a
+    // caller's hand-rolled string) breaks the return trip out of ABA Mobile.
+    it("base64-encodes an object returnDeeplink", async () => {
+      const schemes = { ios_scheme: "myapp://paid", android_scheme: "myapp://paid" };
+      await aba.createPurchase({
+        transactionId: "EA011", amount: 4.5, currency: "USD",
+        paymentOption: "abapay_khqr_deeplink", returnDeeplink: schemes,
+      });
+      const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+      expect(JSON.parse(atob(body.get("return_deeplink")!))).toEqual(schemes);
+    });
+
+    // The hash is built from the same encoded string the body carries. If the
+    // two ever diverge ABA answers "Wrong Hash." and the purchase dies.
+    it("hashes the same encoded return_deeplink it sends", async () => {
+      const encoded = { ios_scheme: "myapp://paid" };
+      await aba.createPurchase({
+        transactionId: "EA012", amount: 1.0, currency: "USD", returnDeeplink: encoded,
+      });
+      const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+      const sent = body.get("return_deeplink")!;
+
+      // Rebuild the signature from the body's own value; it must match.
+      const expected = await generateABAHash(
+        {
+          req_time: body.get("req_time")!,
+          merchant_id: TEST_CONFIG.merchantId,
+          tran_id: "EA012",
+          amount: "1.00",
+          items: "", shipping: "", ctid: "", pwt: "",
+          firstname: "", lastname: "", email: "", phone: "", type: "",
+          payment_option: "", return_url: "", cancel_url: "",
+          continue_success_url: "",
+          return_deeplink: sent,
+          currency: "USD", custom_fields: "", return_params: "",
+        },
+        TEST_CONFIG.apiKey,
+      );
+      expect(body.get("hash")).toBe(expected);
     });
 
     // Bad credentials get an HTML error page back, not JSON. Parsing that

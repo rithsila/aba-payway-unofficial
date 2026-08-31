@@ -1,4 +1,4 @@
-import type { PurchaseItem } from "./types";
+import type { PurchaseItem, ReturnDeeplink } from "./types";
 
 export function generateTransactionId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -56,4 +56,22 @@ export function encodeItemsForABA(
   if (items == null) return "";
   if (typeof items === "string") return items;
   return toBase64Utf8(JSON.stringify(items));
+}
+
+/**
+ * ABA wants `return_deeplink` as base64-encoded JSON naming the schemes that
+ * bring the payer back from ABA Mobile to your app:
+ *
+ *   { "ios_scheme": "myapp://order/42", "android_scheme": "myapp://order/42" }
+ *
+ * Without it the payer finishes in ABA Mobile and is stranded there. Encode an
+ * object; pass a string through unchanged, so callers who already base64'd it
+ * themselves keep working.
+ */
+export function encodeReturnDeeplinkForABA(
+  deeplink: string | ReturnDeeplink | undefined
+): string {
+  if (deeplink == null) return "";
+  if (typeof deeplink === "string") return deeplink;
+  return toBase64Utf8(JSON.stringify(deeplink));
 }

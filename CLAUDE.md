@@ -54,6 +54,9 @@ Success is the **string** `"00"` in v3 but the **number** `0` in the legacy shap
 Other shape details worth knowing:
 
 - Purchase returns `qrString`/`qrImage` (camelCase) on v3, `qr_string` on the old API. It does **not** return `checkout_url` on v3.
+- The deeplink flow (`paymentOption: "abapay_khqr_deeplink"`) adds `abapay_deeplink` (`abamobilebank://…`) plus `app_store`/`play_store` links for a device without ABA Mobile. Verified against the live sandbox — every KHQR/deeplink option returns all of them, so one `createPurchase` covers phone-with-app, phone-without, and desktop. Community docs also list a `checkout_qr_url`; the sandbox never sends it, so the SDK does not read it.
+- `return_deeplink` is base64-encoded JSON, `{ ios_scheme, android_scheme }`, and `encodeReturnDeeplinkForABA` handles it — the same encode-once rule as `items`: the hash and the body must carry the identical string.
+- Only `req_time`, `merchant_id`, `tran_id`, `amount`, `items`, the customer fields, `payment_option`, the URLs, `return_deeplink`, `currency`, `custom_fields`, `return_params` and `hash` go in the **body**. `shipping`, `ctid`, `pwt` and `type` are hashed but must **not** be sent — including `shipping=""` in the body makes ABA answer code 10 "Wrong shipping price."
 - `check-transaction-2` nests the detail under `data`, as `total_amount`, `payment_currency`, `transaction_date`.
 - A rejected request is HTTP **403** with the reason in a JSON envelope, so parse the body on non-2xx too. Codes: 1/5 wrong hash, 6 unknown `tran_id`, 21 expired key.
 - A freshly created `abapay_khqr` transaction returns code 6 for a second or so before it is queryable. The SDK does not retry internally, because code 6 also means a genuinely unknown transaction.

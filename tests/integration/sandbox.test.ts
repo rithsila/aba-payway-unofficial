@@ -112,6 +112,38 @@ describe.skipIf(!hasCredentials)("ABA PayWay sandbox (live)", () => {
     20_000, // real network call: allow up to 20s
   );
 
+  // The mini-app / mobile checkout flow: ABA answers with a link that opens
+  // ABA Mobile straight on this payment. Sending return_deeplink also proves
+  // the SDK's base64 encoding of it still produces a hash ABA accepts.
+  it(
+    "creates an abapay_khqr_deeplink purchase and returns an ABA Mobile link",
+    async () => {
+      if (credentialBroken) throw new Error(credentialBroken);
+
+      const result = await aba.createPurchase({
+        transactionId: generateTransactionId(),
+        amount: 1.0,
+        currency: "USD",
+        items: "Deeplink Test Item",
+        paymentOption: "abapay_khqr_deeplink",
+        returnDeeplink: {
+          ios_scheme: "abasdktest://paid",
+          android_scheme: "abasdktest://paid",
+        },
+      });
+
+      const failure = explainFailure(result.errorCode, result.error);
+      if (failure) throw new Error(failure);
+
+      expect(result.success).toBe(true);
+      expect(result.abapayDeeplink).toContain("abamobilebank://");
+      // The fallback for a payer with no ABA Mobile installed.
+      expect(result.appStoreUrl).toContain("itunes.apple.com");
+      expect(result.playStoreUrl).toContain("play.google.com");
+    },
+    20_000,
+  );
+
   it(
     "checks status of the new transaction and reports PENDING",
     async () => {

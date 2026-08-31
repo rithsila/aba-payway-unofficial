@@ -11,6 +11,31 @@ export interface PurchaseItem {
   readonly price: number;
 }
 
+/**
+ * Schemes ABA Mobile uses to hand the payer back to your app once they have
+ * paid. ABA reads them from `return_deeplink`; see `encodeReturnDeeplinkForABA`.
+ */
+export interface ReturnDeeplink {
+  readonly ios_scheme?: string;
+  readonly android_scheme?: string;
+}
+
+/**
+ * Payment methods ABA accepts in `payment_option`. Omit it and ABA shows every
+ * method the merchant profile has enabled. `abapay_khqr_deeplink` is the one
+ * that answers with `abapayDeeplink` for opening ABA Mobile directly.
+ *
+ * Typed as a union for autocomplete, but any string is still accepted so a
+ * method ABA adds later needs no SDK release.
+ */
+export type PaymentOption =
+  | "cards"
+  | "abapay_khqr"
+  | "abapay_khqr_deeplink"
+  | "alipay"
+  | "wechat"
+  | "google_pay";
+
 export interface PurchaseRequest {
   readonly transactionId: string;
   readonly amount: number;
@@ -28,8 +53,13 @@ export interface PurchaseRequest {
   readonly returnUrl?: string;
   readonly cancelUrl?: string;
   readonly continueSuccessUrl?: string;
-  readonly returnDeeplink?: string;
-  readonly paymentOption?: string;
+  /**
+   * Where ABA Mobile sends the payer back to after payment. Pass an object and
+   * the SDK base64-encodes it; pass a string and it is sent through untouched
+   * (assumed already encoded).
+   */
+  readonly returnDeeplink?: string | ReturnDeeplink;
+  readonly paymentOption?: PaymentOption | (string & {});
   readonly customFields?: string;
   readonly returnParams?: string;
 }
@@ -38,7 +68,20 @@ export interface PurchaseResponse {
   readonly success: boolean;
   readonly transactionId: string;
   readonly checkoutUrl?: string;
+  /**
+   * `abamobilebank://` link that opens ABA Mobile straight to this payment.
+   * Returned for every KHQR/deeplink payment option. Useless on desktop and on
+   * a device without ABA Mobile — fall back to `qrImage` (scan it) or the
+   * store links there.
+   */
   readonly abapayDeeplink?: string;
+  /**
+   * Store links ABA returns alongside the deeplink, for a payer whose device
+   * has no ABA Mobile installed. Verified present on the live sandbox for
+   * every KHQR/deeplink payment option.
+   */
+  readonly appStoreUrl?: string;
+  readonly playStoreUrl?: string;
   readonly qrString?: string;
   /**
    * QR code as a PNG data URI, rendered by ABA. Present on the v3 API, so

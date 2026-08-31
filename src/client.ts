@@ -7,7 +7,12 @@ import type {
 } from "./types";
 import { generateABAHash } from "./hash";
 import { readAbaStatus } from "./response";
-import { getABATimestamp, formatPhoneForABA, encodeItemsForABA } from "./utils";
+import {
+  getABATimestamp,
+  formatPhoneForABA,
+  encodeItemsForABA,
+  encodeReturnDeeplinkForABA,
+} from "./utils";
 
 /**
  * ABA does not always answer with JSON. Bad credentials get an HTML error page,
@@ -63,6 +68,9 @@ export class ABAPayWay {
     // Encode once. The hash and the body must carry the identical string or
     // ABA rebuilds a different signature and rejects the request.
     const items = encodeItemsForABA(request.items);
+    // Same rule as `items`: encode once, then reuse for both the hash and the
+    // body. Encoding twice risks two different strings and a "Wrong Hash."
+    const returnDeeplink = encodeReturnDeeplinkForABA(request.returnDeeplink);
 
     const hashParams = {
       req_time: reqTime,
@@ -82,7 +90,7 @@ export class ABAPayWay {
       return_url: request.returnUrl ?? "",
       cancel_url: request.cancelUrl ?? "",
       continue_success_url: request.continueSuccessUrl ?? "",
-      return_deeplink: request.returnDeeplink ?? "",
+      return_deeplink: returnDeeplink,
       currency: request.currency,
       custom_fields: request.customFields ?? "",
       return_params: request.returnParams ?? "",
@@ -104,7 +112,7 @@ export class ABAPayWay {
       return_url: request.returnUrl ?? "",
       cancel_url: request.cancelUrl ?? "",
       continue_success_url: request.continueSuccessUrl ?? "",
-      return_deeplink: request.returnDeeplink ?? "",
+      return_deeplink: returnDeeplink,
       currency: request.currency,
       custom_fields: request.customFields ?? "",
       return_params: request.returnParams ?? "",
@@ -147,6 +155,8 @@ export class ABAPayWay {
         currency: request.currency,
         checkoutUrl: data.checkout_url,
         abapayDeeplink: data.abapay_deeplink,
+        appStoreUrl: data.app_store,
+        playStoreUrl: data.play_store,
         // v3 answers in camelCase; the older API used snake_case.
         qrString: data.qrString ?? data.qr_string,
         qrImage: data.qrImage ?? data.qr_image,

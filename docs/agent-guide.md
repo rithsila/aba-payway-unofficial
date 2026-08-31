@@ -237,6 +237,65 @@ const cardImage = await generateKHQR({
 `generateKHQR` is a standalone utility: it doesn't call ABA's API itself, so
 it works with any EMV/KHQR string, not just ones from `createPurchase`.
 
+### D. Deeplink — open the ABA app instead of showing a QR
+
+Use this when the payer is already on a phone: a Telegram mini app, a WebView,
+a mobile web checkout, a native app. Showing a QR to someone holding the phone
+they'd scan it with is a dead end; the deeplink opens ABA Mobile directly on
+the payment.
+
+Pass `paymentOption: "abapay_khqr_deeplink"`. It is the same `createPurchase()`
+call — there's no separate deeplink method:
+
+```typescript
+const purchase = await abaPayWay.createPurchase({
+  transactionId: txnId,
+  amount: body.amount,
+  currency: "USD",
+  items: body.items,
+  paymentOption: "abapay_khqr_deeplink",
+  // Where ABA Mobile hands the payer back afterwards. Pass the object —
+  // the SDK base64-encodes it the way ABA expects. Omit it and the payer
+  // finishes paying and is stranded inside ABA Mobile.
+  returnDeeplink: {
+    ios_scheme: "myapp://order/42",
+    android_scheme: "myapp://order/42",
+  },
+});
+```
+
+One response carries every variant of the same payment, so branch on the
+device rather than making a second purchase:
+
+| Payer is on | Field to use |
+| ----------- | ------------ |
+| Phone with ABA Mobile | `purchase.abapayDeeplink` (`abamobilebank://...`) |
+| Phone without it | `purchase.playStoreUrl` / `purchase.appStoreUrl` |
+| Desktop | `purchase.qrImage`, or a branded card via `generateKHQR` |
+
+Two rules that matter more than the wiring:
+
+1. **The return trip is not proof of payment.** Anyone can open your
+   `returnDeeplink` URL. Confirm with `checkStatus(txnId)` server-side before
+   you mark an order paid, every time.
+2. **You lose the browser tab.** Once ABA Mobile takes over, your page may be
+   backgrounded or killed. Persist the transaction ID server-side when you
+   create the purchase — don't keep it only in component state.
+
+A minimal client, after your API route returns the purchase:
+
+```typescript
+if (isMobile && purchase.abapayDeeplink) {
+  window.location.href = purchase.abapayDeeplink;
+} else {
+  showQr(purchase.qrImage);
+}
+// Either way, poll your own /check-status route until it leaves PENDING.
+```
+
+Custom URL schemes are blocked in some embedded WebViews. Always render the QR
+and the store links as a visible fallback rather than assuming the jump worked.
+
 ---
 
 ## Step 6: Verify & Check Status Endpoint
@@ -273,3 +332,5 @@ second to become queryable; retry once), `"21"` means the API key expired.
    and `verifyWebhook` on `ABAPayWay`, plus the standalone `generateKHQR` and
    `generateTransactionId` exports. Don't invent method names — if unsure,
    check `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
+5. If you built a deeplink flow, confirm the order is marked paid only by a
+   server-side `checkStatus`, never by the payer arriving at `returnDeeplink`.

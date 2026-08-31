@@ -72,6 +72,7 @@ if (purchase.success) {
   console.log("KHQR payload:", purchase.qrString);
   console.log("QR image:", purchase.qrImage); // "data:image/png;base64,..."
   console.log("ABA app deeplink:", purchase.abapayDeeplink);
+  console.log("Not installed?", purchase.playStoreUrl, purchase.appStoreUrl);
 }
 
 // 3. Check payment status
@@ -99,6 +100,61 @@ console.log("KHQR image:", khqrImage); // "data:image/svg+xml;base64,..."
 
 ---
 
+## Opening the ABA app (deeplink)
+
+For a mobile checkout — a Telegram mini app, a WebView, a native app — you want
+the payer to land *inside* ABA Mobile, not squint at a QR on the same phone they
+are paying with. Ask for it with `paymentOption` and ABA answers with a link:
+
+```typescript
+const purchase = await aba.createPurchase({
+  transactionId: txnId,
+  amount: 4.5,
+  currency: "USD",
+  items: [{ name: "Fried rice", quantity: 1, price: 4.5 }],
+  paymentOption: "abapay_khqr_deeplink",
+  // Where ABA Mobile sends the payer back once they have paid. Pass the object
+  // and the SDK base64-encodes it the way ABA expects.
+  returnDeeplink: {
+    ios_scheme: "myapp://order/42",
+    android_scheme: "myapp://order/42",
+  },
+});
+
+purchase.abapayDeeplink; // "abamobilebank://ababank.com?type=payway&qrcode=..."
+purchase.qrString;       // same payment, as EMV data — for desktop
+purchase.qrImage;        // same payment, as a PNG data URI
+purchase.playStoreUrl;   // where to send a payer with no ABA Mobile installed
+purchase.appStoreUrl;
+```
+
+One call gives you all of them, so branch on the device rather than making two
+purchases:
+
+| Payer is on | Show |
+| ----------- | ---- |
+| Phone with ABA Mobile | `abapayDeeplink` |
+| Phone without it | `playStoreUrl` / `appStoreUrl` |
+| Desktop | `qrImage`, or `generateKHQR(qrString)` for a branded card |
+
+Then poll `checkStatus(txnId)` until it leaves `PENDING`. **Never treat the
+payer returning through your `returnDeeplink` as proof of payment** — anyone can
+open that URL. `checkStatus` is the only authority.
+
+> A brand-new transaction answers `checkStatus` with `errorCode === "6"`
+> ("tran_id not found") for a second or so before it becomes queryable. Retry
+> rather than reporting a failure; the SDK does not hide this, because code 6
+> also means a genuinely unknown transaction.
+
+### `returnDeeplink` encoding
+
+ABA wants `return_deeplink` as base64-encoded JSON. Pass the object and the SDK
+encodes it; pass a string and it goes through untouched, so code that encoded it
+by hand keeps working. `encodeReturnDeeplinkForABA` is exported if you need it
+directly.
+
+---
+
 ## API Reference
 
 | Export                     | Type     | Description                                         |
@@ -108,6 +164,8 @@ console.log("KHQR image:", khqrImage); // "data:image/svg+xml;base64,..."
 | `ABAPayWay.checkStatus`    | method   | Check transaction status. Returns `StatusResponse`. |
 | `ABAPayWay.verifyWebhook`  | method   | Verify webhook signature. Returns `boolean`.        |
 | `generateKHQR`             | function | Build a KHQR image (base64 SVG data URI) from EMV data. Async. |
+| `encodeItemsForABA`        | function | Base64-encode a `PurchaseItem[]` the way ABA expects. |
+| `encodeReturnDeeplinkForABA` | function | Base64-encode a `ReturnDeeplink` the way ABA expects. |
 | `generateABAHash`          | function | Generate HMAC-SHA512 hash for ABA API calls.        |
 | `generateTransactionId`    | function | Generate a unique transaction ID.                   |
 | `getABATimestamp`          | function | Get current timestamp in ABA format.                |
@@ -123,6 +181,8 @@ console.log("KHQR image:", khqrImage); // "data:image/svg+xml;base64,..."
 | `PurchaseResponse` | Result from `createPurchase`                                     |
 | `StatusResponse`   | Result from `checkStatus`                                        |
 | `PaymentStatus`    | `"PENDING" \| "APPROVED" \| "DECLINED" \| "REFUNDED" \| "ERROR"` |
+| `PaymentOption`    | `"cards" \| "abapay_khqr" \| "abapay_khqr_deeplink" \| "alipay" \| "wechat" \| "google_pay"` |
+| `ReturnDeeplink`   | `{ ios_scheme?, android_scheme? }` — where ABA Mobile returns the payer |
 | `KHQROptions`      | Input for `generateKHQR`                                         |
 | `HashParams`       | Raw parameters for hash generation                               |
 

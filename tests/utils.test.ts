@@ -6,6 +6,7 @@ import {
   getQRExpiration,
   toBase64Utf8,
   encodeItemsForABA,
+  encodeReturnDeeplinkForABA,
 } from "../src/utils";
 
 describe("generateTransactionId", () => {
@@ -81,6 +82,20 @@ describe("encodeItemsForABA", () => {
   });
   it("returns an empty string when items are missing", () => {
     expect(encodeItemsForABA(undefined)).toBe("");
+  });
+});
+
+describe("encodeReturnDeeplinkForABA", () => {
+  it("base64-encodes the ios/android schemes as JSON", () => {
+    const schemes = { ios_scheme: "myapp://order/42", android_scheme: "myapp://order/42" };
+    expect(JSON.parse(atob(encodeReturnDeeplinkForABA(schemes)))).toEqual(schemes);
+  });
+  // Callers who encoded it themselves before the SDK did must keep working.
+  it("passes a string through unchanged", () => {
+    expect(encodeReturnDeeplinkForABA("already-encoded")).toBe("already-encoded");
+  });
+  it("returns an empty string when no deeplink is given", () => {
+    expect(encodeReturnDeeplinkForABA(undefined)).toBe("");
   });
 });
 
