@@ -48,7 +48,6 @@ const aba = new ABAPayWay({
   merchantId: "your_merchant_id",
   apiKey: "your_api_key",
   baseUrl: "https://checkout.payway.com.kh",
-  webhookSecret: "your_webhook_secret", // optional
 });
 
 // 2. Create a purchase
@@ -157,9 +156,13 @@ You need ABA PayWay merchant credentials to use this SDK:
 | `merchantId`    | Your ABA PayWay merchant ID                                |
 | `apiKey`        | Your ABA PayWay API key                                    |
 | `baseUrl`       | ABA PayWay base URL (e.g.`https://checkout.payway.com.kh`) |
-| `webhookSecret` | Secret for webhook signature verification (optional)       |
+| `webhookSecret` | Accepted but currently unused — see note below (optional)   |
 
 Contact ABA Bank to get these credentials.
+
+> **`webhookSecret`:** ABA does not issue one and the SDK never reads it. ABA
+> signs pushback with an `X-PayWay-HMAC-SHA512` header that `verifyWebhook()`
+> does not implement yet.
 
 ---
 
@@ -199,7 +202,7 @@ Then edit `.env`:
 ABA_MERCHANT_ID=your_sandbox_merchant_id
 ABA_API_KEY=your_sandbox_api_key
 ABA_BASE_URL=https://checkout-sandbox.payway.com.kh
-ABA_WEBHOOK_SECRET=your_sandbox_webhook_secret
+# ABA_WEBHOOK_SECRET=  # ABA does not issue one
 ```
 
 `.env` is gitignored. Never commit real credentials.

@@ -54,7 +54,7 @@ export const abaPayWay = new ABAPayWay({
   merchantId: process.env.ABA_PAYWAY_MERCHANT_ID!,
   apiKey: process.env.ABA_PAYWAY_API_KEY!,
   baseUrl: process.env.ABA_PAYWAY_BASE_URL || "https://checkout.payway.com.kh",
-  webhookSecret: process.env.ABA_PAYWAY_WEBHOOK_SECRET,
+  // No webhookSecret: ABA does not issue one, and the field is unused.
 });
 ```
 
