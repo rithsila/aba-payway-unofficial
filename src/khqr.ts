@@ -1,6 +1,6 @@
 import type { KHQROptions } from "./types";
 
-const DEFAULT_HEADER_COLOR = "#e63946";
+const DEFAULT_HEADER_COLOR = "#bc271a";
 const QR_API_BASE = "https://quickchart.io/qr";
 
 function formatAmount(amount: number, currency: string): string {
@@ -58,6 +58,7 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
   <rect width="400" height="540" rx="16" fill="white" stroke="#e0e0e0" stroke-width="1"/>
   <rect width="400" height="80" rx="16" fill="${headerColor}"/>
   <rect y="16" width="400" height="64" fill="${headerColor}"/>
+  <polygon points="360,80 400,80 400,104" fill="${headerColor}"/>
   <text x="200" y="42" text-anchor="middle" fill="white" font-family="system-ui,sans-serif" font-size="18" font-weight="bold">${safeMerchantName}</text>
   <text x="200" y="65" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui,sans-serif" font-size="13">KHQR Payment</text>
   <text x="200" y="108" text-anchor="middle" fill="#1a1a1a" font-family="system-ui,sans-serif" font-size="28" font-weight="bold">${formattedAmount}</text>
