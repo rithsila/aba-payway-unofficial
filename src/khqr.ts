@@ -35,6 +35,13 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
     if (qrResponse.ok) qrSvgContent = await qrResponse.text();
   } catch { /* fallback: empty QR area */ }
 
+  // quickchart's QR path data is drawn in module-grid units (its own
+  // viewBox, e.g. "0 0 23 23"), not in 280x280 pixels — the width/height on
+  // its outer <svg> is what scales it. Stripping that tag also strips the
+  // viewBox, so the grabbed viewBox is reapplied on a nested <svg> below;
+  // without it the QR would render at native module size instead of filling
+  // the frame.
+  const qrViewBox = qrSvgContent.match(/viewBox="([^"]*)"/)?.[1] ?? "0 0 280 280";
   const innerQr = qrSvgContent
     .replace(/<\?xml[^>]*\?>/g, "")
     .replace(/<svg[^>]*>/g, "")
@@ -47,10 +54,12 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
   // 280x280 box at (60,160) — 22px arms, drawn as open polylines so the
   // frame reads as a "scan here" cue rather than a plain border.
   //
-  // The QR itself is clipped and translated in two nested <g>s rather than
-  // one: putting both `clip-path` and `transform` on the same element shifts
-  // the clip rect's coordinates by that same transform, clipping away most
-  // of the actual QR pattern.
+  // The QR is placed with a nested <svg x y width height viewBox> rather
+  // than a <g transform>: putting both `clip-path` and `transform` on the
+  // same element shifts the clip rect's own coordinates by that same
+  // transform, clipping away most of the actual QR pattern. The nested
+  // <svg> also rescales the QR from its native module-grid viewBox to fill
+  // the 280x280 box, which a <g> would not do on its own.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 540" width="400" height="540">
   <defs><clipPath id="qr-clip"><rect x="60" y="160" width="280" height="280" rx="8"/></clipPath></defs>
   <rect width="400" height="540" rx="16" fill="white" stroke="#e0e0e0" stroke-width="1"/>
@@ -67,9 +76,9 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
     <polyline points="334,456 356,456 356,434"/>
   </g>
   <g clip-path="url(#qr-clip)">
-    <g transform="translate(60,160)">
+    <svg x="60" y="160" width="280" height="280" viewBox="${qrViewBox}">
       ${innerQr || '<rect width="280" height="280" fill="#f5f5f5"/><text x="140" y="140" text-anchor="middle" fill="#999" font-size="14">QR Code</text>'}
-    </g>
+    </svg>
   </g>
   <text x="200" y="480" text-anchor="middle" fill="#666" font-family="system-ui,sans-serif" font-size="11">Scan with any KHQR-compatible app</text>
   <text x="200" y="501" text-anchor="middle" fill="#999" font-family="system-ui,sans-serif" font-size="10">Powered by Bakong</text>
