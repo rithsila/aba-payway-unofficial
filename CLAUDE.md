@@ -42,7 +42,25 @@ All hashing uses `crypto.subtle` + `TextEncoder` + `btoa`, never `node:crypto`. 
 
 ### API response convention
 
-Client methods never throw on a failed payment or HTTP error. They catch everything and return a result object with `success: false` and an `error` string. ABA signals application-level errors with a JSON body where `status !== 0` (0 means success). Follow this pattern for any new client method — callers expect to branch on `success`, not catch exceptions.
+Client methods never throw on a failed payment or HTTP error. They catch everything and return a result object with `success: false`, an `error` string, and ABA's `errorCode`. Follow this pattern for any new client method — callers expect to branch on `success`, not catch exceptions.
+
+ABA ships **two status-envelope shapes**, and `src/response.ts` (`readAbaStatus`) normalises both. Never test `data.status !== 0` directly:
+
+- legacy (`check-transaction`): `{ "status": 6, "description": "tran_id not found" }`
+- v3 (`check-transaction-2`, current purchase): `{ "status": { "code": "00", "message": "Success!" } }`
+
+Success is the **string** `"00"` in v3 but the **number** `0` in the legacy shape, while failures are plain numbers in both. Reading a v3 success as a failure is exactly the bug that made a valid key look expired.
+
+Other shape details worth knowing:
+
+- Purchase returns `qrString`/`qrImage` (camelCase) on v3, `qr_string` on the old API. It does **not** return `checkout_url` on v3.
+- `check-transaction-2` nests the detail under `data`, as `total_amount`, `payment_currency`, `transaction_date`.
+- A rejected request is HTTP **403** with the reason in a JSON envelope, so parse the body on non-2xx too. Codes: 1/5 wrong hash, 6 unknown `tran_id`, 21 expired key.
+- A freshly created `abapay_khqr` transaction returns code 6 for a second or so before it is queryable. The SDK does not retry internally, because code 6 also means a genuinely unknown transaction.
+
+### The RSA key pair is unused
+
+ABA's credential sheet includes an RSA public and private key alongside the merchant ID and "Public Key". Nothing in this SDK uses them: purchase, check-transaction-2, and webhook verification are all HMAC-SHA512 signed with the API key. The RSA pair belongs to the payout/refund APIs, which ABA enables per merchant (`/payments/refund` is 404 on a default sandbox merchant). Do not wire RSA into the request path without a specific endpoint that needs it.
 
 ### `generateKHQR` note
 

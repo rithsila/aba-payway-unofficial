@@ -67,7 +67,12 @@ const purchase = await aba.createPurchase({
 });
 
 if (purchase.success) {
-  console.log("Checkout URL:", purchase.checkoutUrl);
+  // The current (v3) API answers with the KHQR payload and a PNG that ABA
+  // rendered for you. `checkoutUrl` is only set by older API versions, so
+  // check for it rather than assuming it.
+  console.log("KHQR payload:", purchase.qrString);
+  console.log("QR image:", purchase.qrImage); // "data:image/png;base64,..."
+  console.log("ABA app deeplink:", purchase.abapayDeeplink);
 }
 
 // 3. Check payment status
@@ -81,7 +86,8 @@ const isValid = await aba.verifyWebhook(
   webhookSecret,
 );
 
-// 5. Generate a KHQR image (base64 SVG data URI)
+// 5. Optionally render your own styled KHQR card (base64 SVG data URI).
+//    Skip this if `purchase.qrImage` is enough — that one needs no extra call.
 const khqrImage = await generateKHQR({
   emvData: purchase.qrString ?? "",
   amount: 10.0,

@@ -21,16 +21,38 @@ describe("ABAPayWay", () => {
     it("throws if apiKey is missing", () => {
       expect(() => new ABAPayWay({ merchantId: "id", apiKey: "", baseUrl: "https://example.com" })).toThrow("apiKey is required");
     });
+    it("throws if baseUrl is missing", () => {
+      expect(() => new ABAPayWay({ merchantId: "id", apiKey: "key", baseUrl: "" })).toThrow("baseUrl is required");
+    });
+    // ABA's credential sheet lists the full purchase URL under "API Url",
+    // so accept that verbatim and keep only the origin.
+    it("reduces a full API URL to its origin", () => {
+      const client = new ABAPayWay({
+        merchantId: "id", apiKey: "key",
+        baseUrl: "https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase",
+      });
+      expect(client.config.baseUrl).toBe("https://checkout-sandbox.payway.com.kh");
+    });
+    it("strips a trailing slash from a base URL", () => {
+      const client = new ABAPayWay({
+        merchantId: "id", apiKey: "key", baseUrl: "https://checkout-sandbox.payway.com.kh/",
+      });
+      expect(client.config.baseUrl).toBe("https://checkout-sandbox.payway.com.kh");
+    });
   });
 
   describe("createPurchase", () => {
     let fetchSpy: ReturnType<typeof vi.fn>;
     beforeEach(() => {
+      // Mirrors the live v3 sandbox reply: nested status envelope with the
+      // string code "00", and a camelCase qrString/qrImage.
       const payload = {
-        status: 0, description: "Success",
-        checkout_url: "https://checkout-sandbox.payway.com.kh/checkout/abc123",
+        qrString: "00020101021229370016KHQR-MOCK-DATA",
+        qrImage: "data:image/png;base64,iVBORw0KGgo=",
         abapay_deeplink: "abapay://pay?token=abc123",
-        qr_string: "00020101021229370016KHQR-MOCK-DATA",
+        checkout_url: "https://checkout-sandbox.payway.com.kh/checkout/abc123",
+        description: "success",
+        status: { version: "v3", code: "00", message: "Success!", tran_id: "EA001" },
       };
       fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
@@ -52,6 +74,48 @@ describe("ABAPayWay", () => {
       expect(fetchSpy.mock.calls[0][0]).toContain("/api/payment-gateway/v1/payments/purchase");
       expect(result.success).toBe(true);
       expect(result.checkoutUrl).toContain("checkout");
+    });
+
+    // v3 renames qr_string to qrString and adds a ready-to-render PNG.
+    it("reads the v3 qrString and qrImage fields", async () => {
+      const result = await aba.createPurchase({
+        transactionId: "EA001", amount: 15.0, currency: "USD", paymentOption: "abapay_khqr",
+      });
+      expect(result.qrString).toBe("00020101021229370016KHQR-MOCK-DATA");
+      expect(result.qrImage).toBe("data:image/png;base64,iVBORw0KGgo=");
+    });
+
+    it("still reads the legacy qr_string field", async () => {
+      const legacy = { status: 0, description: "Success", qr_string: "LEGACY-QR" };
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(legacy)),
+      });
+      const result = await aba.createPurchase({ transactionId: "EA009", amount: 1.0, currency: "USD" });
+      expect(result.success).toBe(true);
+      expect(result.qrString).toBe("LEGACY-QR");
+    });
+
+    // A wrong hash is HTTP 403 with the reason in a JSON envelope. Dumping the
+    // raw body lost the code, so callers could not tell "Wrong Hash." from an
+    // expired key.
+    it("reports the ABA code and message from a 403 rejection", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false, status: 403,
+        text: () => Promise.resolve(JSON.stringify({ status: { code: 1, message: "Wrong Hash." } })),
+      });
+      const result = await aba.createPurchase({ transactionId: "EA005", amount: 1.0, currency: "USD" });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Wrong Hash.");
+      expect(result.errorCode).toBe("1");
+    });
+
+    it("reports an expired API key as code 21", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false, status: 403,
+        text: () => Promise.resolve(JSON.stringify({ status: { code: 21, message: "End of API lifetime" } })),
+      });
+      const result = await aba.createPurchase({ transactionId: "EA006", amount: 1.0, currency: "USD" });
+      expect(result.errorCode).toBe("21");
     });
 
     // ABA only returns qr_string / abapay_deeplink when payment_option asks
@@ -93,7 +157,16 @@ describe("ABAPayWay", () => {
   describe("checkStatus", () => {
     let fetchSpy: ReturnType<typeof vi.fn>;
     beforeEach(() => {
-      const payload = { status: 0, description: "APPROVED", payment_status: "APPROVED", amount: "15.00" };
+      const payload = {
+        data: {
+          payment_status_code: 0,
+          total_amount: 15.0,
+          payment_currency: "USD",
+          payment_status: "APPROVED",
+          transaction_date: "2026-08-31 14:25:57",
+        },
+        status: { code: "00", message: "Success!", tran_id: "EA001" },
+      };
       fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -109,6 +182,52 @@ describe("ABAPayWay", () => {
       expect(fetchSpy.mock.calls[0][0]).toContain("/api/payment-gateway/v1/payments/check-transaction-2");
       expect(result.success).toBe(true);
       expect(result.status).toBe("APPROVED");
+    });
+
+    // v3 nests the detail under `data` and renames the money fields.
+    it("reads amount, currency and time from the nested v3 detail", async () => {
+      const result = await aba.checkStatus("EA001");
+      expect(result.amount).toBe(15.0);
+      expect(result.currency).toBe("USD");
+      expect(result.paymentTime).toBe("2026-08-31 14:25:57");
+    });
+
+    it("reports PENDING for an unpaid transaction", async () => {
+      const payload = {
+        data: { payment_status: "PENDING", total_amount: 1.0, payment_currency: "" },
+        status: { code: "00", message: "Success!" },
+      };
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)),
+      });
+      const result = await aba.checkStatus("EA007");
+      expect(result.status).toBe("PENDING");
+      // payment_currency stays empty until the payment settles.
+      expect(result.currency).toBeUndefined();
+    });
+
+    // An unknown tran_id comes back HTTP 200 with code 6, not an HTTP error.
+    it("reports an unknown transaction as code 6", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200,
+        text: () => Promise.resolve(JSON.stringify({ status: { code: 6, message: "tran_id not found" } })),
+      });
+      const result = await aba.checkStatus("NOPE");
+      expect(result.success).toBe(false);
+      expect(result.status).toBe("ERROR");
+      expect(result.errorCode).toBe("6");
+      expect(result.error).toBe("tran_id not found");
+    });
+
+    it("still reads the legacy flat status shape", async () => {
+      const legacy = { status: 0, description: "APPROVED", payment_status: "APPROVED", amount: "15.00" };
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(legacy)),
+      });
+      const result = await aba.checkStatus("EA008");
+      expect(result.success).toBe(true);
+      expect(result.status).toBe("APPROVED");
+      expect(result.amount).toBe(15.0);
     });
   });
 
