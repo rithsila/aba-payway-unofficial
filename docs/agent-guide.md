@@ -201,13 +201,41 @@ export async function POST(req: Request) {
       paymentOption: "abapay_khqr",
     });
 
-    // qrResult.qrImage is a PNG data URI, ready for <img src>.
+    // qrResult.qrImage is a bare, unbranded PNG data URI straight from ABA —
+    // ready for <img src>, but see the "branded card" option below.
     return NextResponse.json(qrResult);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 ```
+
+There are two ways to show the QR to a customer — pick one, don't build both:
+
+- **Fast path**: render `qrResult.qrImage` directly in an `<img>` tag. It's
+  ABA's own PNG, bare (no merchant name, amount, or branding around it).
+- **Branded card**: pass `qrResult.qrString` (the raw EMV data) through
+  `generateKHQR()` to get a styled, self-contained card — merchant name,
+  formatted amount, a "Scan • Pay • Done" viewfinder frame around the QR,
+  and a footer — as one base64 SVG data URI. Use this when the QR is shown
+  on its own (a checkout page, a printed counter stand), not the bare image.
+
+```typescript
+import { generateKHQR } from "aba-payway-sdk-unofficial";
+
+const cardImage = await generateKHQR({
+  emvData: qrResult.qrString!,
+  amount: qrResult.amount,
+  currency: qrResult.currency as "USD" | "KHR",
+  merchantName: "Your Business Name",
+  // headerColor?: e.g. "#0057b8" to match your brand instead of the default red
+});
+
+// cardImage is `data:image/svg+xml;base64,...` — ready for <img src>.
+```
+
+`generateKHQR` is a standalone utility: it doesn't call ABA's API itself, so
+it works with any EMV/KHQR string, not just ones from `createPurchase`.
 
 ---
 
@@ -241,6 +269,7 @@ second to become queryable; retry once), `"21"` means the API key expired.
 1. Verify environment variables are loaded properly.
 2. Ensure TypeScript types compile without errors (`npm run build` or `npx tsc --noEmit`).
 3. Never expose `ABA_API_KEY` to the client/browser bundle.
-4. Only call methods that actually exist on `ABAPayWay`: `createPurchase`,
-   `checkStatus`, `verifyWebhook`. Don't invent method names — if unsure,
+4. Only call methods that actually exist: `createPurchase`, `checkStatus`,
+   and `verifyWebhook` on `ABAPayWay`, plus the standalone `generateKHQR` and
+   `generateTransactionId` exports. Don't invent method names — if unsure,
    check `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
