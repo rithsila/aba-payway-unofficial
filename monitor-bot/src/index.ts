@@ -222,10 +222,19 @@ async function updateDocsCache(env: Env) {
         const currentHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 
         if (oldHash && oldHash !== currentHash) {
-          await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `🚨 <b>ABA PayWay Update Detected!</b>\nThe official docs have changed. Check it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`);
+          const oldMarkdown = await env.CACHE.get("aba_docs_context") || "";
+          const summary = await analyzeDocsChange(env.GEMINI_API_KEY, oldMarkdown, markdown);
+          
+          let tgMessage = `🚨 <b>ABA PayWay Update Detected!</b>\n\n${summary}\n\nCheck it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`;
+          // Convert markdown to basic HTML for telegram
+          tgMessage = tgMessage.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+          tgMessage = tgMessage.replace(/\*(.*?)\*/g, '<i>$1</i>');
+          tgMessage = tgMessage.replace(/`(.*?)`/g, '<code>$1</code>');
+          
+          await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, tgMessage);
           
           if (env.FB_PAGE_ID && env.FB_PAGE_TOKEN) {
-            const fbMessage = `🚨 ABA PayWay Update Detected!\nThe official docs have changed. Check it out: ${ABA_DOCS_URL}`;
+            const fbMessage = `🚨 ABA PayWay Update Detected!\n\n${summary}\n\nCheck it out: ${ABA_DOCS_URL}`;
             const fbResult = await sendFacebookPost(env.FB_PAGE_ID, env.FB_PAGE_TOKEN, fbMessage);
             if (fbResult !== "Success") {
                await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `⚠️ <b>Facebook Post Failed:</b>\n<code>${fbResult}</code>`);
@@ -260,5 +269,36 @@ async function sendFacebookPost(pageId: string, token: string, message: string) 
     return "Success";
   } catch (err: any) {
     return `Error: ${err.message}`;
+  }
+}
+
+async function analyzeDocsChange(apiKey: string, oldText: string, newText: string): Promise<string> {
+  if (!apiKey) return "The official docs have changed, but AI analysis is unavailable.";
+
+  const promptText = `You are a technical analyst. Compare these two versions of API documentation.
+Tell me exactly what changed. 
+List new features, changed parameters, or removed services.
+Keep it short, clear, and use bullet points.
+
+--- OLD DOCS ---
+${oldText}
+
+--- NEW DOCS ---
+${newText}`;
+
+  try {
+    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }]
+      })
+    });
+
+    const aiData: any = await aiRes.json();
+    let reply = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    return reply || "The official docs have changed. (No AI summary available)";
+  } catch (err) {
+    return "The official docs have changed. (Failed to generate AI summary)";
   }
 }
