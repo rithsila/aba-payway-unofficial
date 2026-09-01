@@ -122,7 +122,7 @@ ${sdkContext}`;
         "X-Title": "ABA Monitor Bot"
       },
       body: JSON.stringify({
-        model: "upstage/solar-pro:free", // using the free tier model
+        model: "upstage/solar-pro4:free", // user requested this specific free model ID
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question }
