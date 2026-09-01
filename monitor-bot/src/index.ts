@@ -117,10 +117,12 @@ ${sdkContext}`;
       method: "POST",
       headers: {
         "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://aba-monitor-bot.com",
+        "X-Title": "ABA Monitor Bot"
       },
       body: JSON.stringify({
-        model: "upstage/solar-pro", // You can change this to stepfun/step-3.7-flash if preferred
+        model: "upstage/solar-pro:free", // using the free tier model
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question }
@@ -129,7 +131,13 @@ ${sdkContext}`;
     });
 
     const aiData: any = await aiRes.json();
-    let reply = aiData.choices?.[0]?.message?.content || "I couldn't process that. Try again.";
+    let reply = aiData.choices?.[0]?.message?.content;
+    
+    if (!reply) {
+       // Debugging info if it fails
+       await sendTelegramMessage(env.BOT_TOKEN, chatId, `🤖 <b>AI Error:</b>\n\nAPI Response: <code>${JSON.stringify(aiData)}</code>`);
+       return;
+    }
     
     // Convert basic markdown to Telegram HTML to avoid parsing errors
     reply = reply.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
@@ -145,6 +153,9 @@ ${sdkContext}`;
 // Hourly cron job to scrape the latest docs and save them to KV
 async function updateDocsCache(env: Env) {
     if (!env.FIRECRAWL_API_KEY) return;
+
+    // We send announcements to the channel instead of the group
+    const ANNOUNCEMENT_CHANNEL = "@abapaywayunofficial";
 
     try {
       // Scrape ABA docs using Firecrawl API
@@ -173,7 +184,7 @@ async function updateDocsCache(env: Env) {
         const currentHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 
         if (oldHash && oldHash !== currentHash) {
-          await sendTelegramMessage(env.BOT_TOKEN, CHAT_ID, `🚨 <b>ABA PayWay Update Detected!</b>\nThe official docs have changed. Check it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`);
+          await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `🚨 <b>ABA PayWay Update Detected!</b>\nThe official docs have changed. Check it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`);
         }
         
         // Save both the hash for comparison and the markdown content for the AI!
