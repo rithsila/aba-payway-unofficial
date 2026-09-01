@@ -53,6 +53,8 @@ export default {
 
           if (text.startsWith("/status")) {
             ctx.waitUntil(handleStatusCommand(env.BOT_TOKEN, chatId));
+          } else if (text.startsWith("/updatedocs")) {
+            ctx.waitUntil(triggerDocsUpdate(env, chatId));
           } else if (text.startsWith("/ask")) {
             const question = text.replace("/ask", "").trim();
             if (question) {
@@ -138,6 +140,12 @@ ${question}`;
   } catch (err) {
     await sendTelegramMessage(env.BOT_TOKEN, chatId, "Sorry, I had an error talking to Gemini.");
   }
+}
+
+async function triggerDocsUpdate(env: Env, chatId: string | number) {
+  await sendTelegramMessage(env.BOT_TOKEN, chatId, "🔄 Starting Firecrawl to scrape the latest ABA docs...");
+  await updateDocsCache(env);
+  await sendTelegramMessage(env.BOT_TOKEN, chatId, "✅ Firecrawl finished! The AI context is now updated.");
 }
 
 // Hourly cron job to scrape the latest docs and save them to KV
