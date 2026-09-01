@@ -3,6 +3,8 @@ export interface Env {
   OPENROUTER_API_KEY: string;
   GEMINI_API_KEY: string;
   FIRECRAWL_API_KEY: string;
+  FB_PAGE_ID: string;
+  FB_PAGE_TOKEN: string;
   CACHE: KVNamespace;
 }
 
@@ -221,6 +223,14 @@ async function updateDocsCache(env: Env) {
 
         if (oldHash && oldHash !== currentHash) {
           await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `🚨 <b>ABA PayWay Update Detected!</b>\nThe official docs have changed. Check it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`);
+          
+          if (env.FB_PAGE_ID && env.FB_PAGE_TOKEN) {
+            const fbMessage = `🚨 ABA PayWay Update Detected!\nThe official docs have changed. Check it out: ${ABA_DOCS_URL}`;
+            const fbResult = await sendFacebookPost(env.FB_PAGE_ID, env.FB_PAGE_TOKEN, fbMessage);
+            if (fbResult !== "Success") {
+               await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `⚠️ <b>Facebook Post Failed:</b>\n<code>${fbResult}</code>`);
+            }
+          }
         }
         
         // Save both the hash for comparison and the markdown content for the AI!
@@ -230,4 +240,25 @@ async function updateDocsCache(env: Env) {
     } catch (err) {
       console.error(err);
     }
+}
+
+async function sendFacebookPost(pageId: string, token: string, message: string) {
+  const url = `https://graph.facebook.com/v20.0/${pageId}/feed`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message,
+        access_token: token
+      })
+    });
+    const data: any = await res.json();
+    if (data.error) {
+      return `Error: ${data.error.message}`;
+    }
+    return "Success";
+  } catch (err: any) {
+    return `Error: ${err.message}`;
+  }
 }
