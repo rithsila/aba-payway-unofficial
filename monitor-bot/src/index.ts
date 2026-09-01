@@ -1,6 +1,7 @@
 export interface Env {
   BOT_TOKEN: string;
   OPENROUTER_API_KEY: string;
+  GEMINI_API_KEY: string;
   FIRECRAWL_API_KEY: string;
   CACHE: KVNamespace;
 }
@@ -85,23 +86,20 @@ async function handleStatusCommand(token: string, chatId: string | number) {
 }
 
 async function handleAskCommand(env: Env, chatId: string | number, question: string) {
-  if (!env.OPENROUTER_API_KEY) {
-    await sendTelegramMessage(env.BOT_TOKEN, chatId, "The AI is currently resting. API key is missing.");
+  if (!env.GEMINI_API_KEY) {
+    await sendTelegramMessage(env.BOT_TOKEN, chatId, "The AI is currently resting. Gemini API key is missing.");
     return;
   }
 
-  // 1. Get cached ABA docs (from the hourly Firecrawl job)
   let abaContext = await env.CACHE.get("aba_docs_context");
   if (!abaContext) {
     abaContext = "No ABA Docs context cached yet. Try again later.";
   }
 
-  // 2. Fetch SDK README for fresh project context
   const sdkRes = await fetch(SDK_DOCS_URL);
   const sdkContext = await sdkRes.text();
 
-  // 3. Prepare AI Prompt
-  const systemPrompt = `You are an expert AI assistant for the ABA PayWay Unofficial SDK community.
+  const promptText = `You are an expert AI assistant for the ABA PayWay Unofficial SDK community.
 Answer the user's question based ONLY on the provided context below. Be concise, friendly, and include code snippets if helpful.
 Format the output in clean HTML supported by Telegram (<b>, <i>, <code>, <pre>).
 
@@ -109,36 +107,24 @@ Format the output in clean HTML supported by Telegram (<b>, <i>, <code>, <pre>).
 ${abaContext}
 
 --- UNOFFICIAL SDK DOCS ---
-${sdkContext}`;
+${sdkContext}
+
+--- USER QUESTION ---
+${question}`;
 
   try {
-    // 4. Call OpenRouter API (using Solar Pro 4 free)
-    const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://aba-monitor-bot.com",
-        "X-Title": "ABA Monitor Bot"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        models: [
-          "google/gemma-4-31b-it:free",
-          "nvidia/nemotron-3.5-lightning:free",
-          "liquid/lfm-2.5-2.6b:free"
-        ], // OpenRouter will automatically fall back to the next free model if one is rate-limited!
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: question }
-        ]
+        contents: [{ parts: [{ text: promptText }] }]
       })
     });
 
     const aiData: any = await aiRes.json();
-    let reply = aiData.choices?.[0]?.message?.content;
+    let reply = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!reply) {
-       // Debugging info if it fails
        await sendTelegramMessage(env.BOT_TOKEN, chatId, `🤖 <b>AI Error:</b>\n\nAPI Response: <code>${JSON.stringify(aiData)}</code>`);
        return;
     }
@@ -148,9 +134,9 @@ ${sdkContext}`;
     reply = reply.replace(/\*(.*?)\*/g, '<i>$1</i>');
     reply = reply.replace(/`(.*?)`/g, '<code>$1</code>');
 
-    await sendTelegramMessage(env.BOT_TOKEN, chatId, `🤖 <b>AI Assistant:</b>\n\n${reply}`);
+    await sendTelegramMessage(env.BOT_TOKEN, chatId, `🤖 <b>Gemini Assistant:</b>\n\n${reply}`);
   } catch (err) {
-    await sendTelegramMessage(env.BOT_TOKEN, chatId, "Sorry, I had an error talking to the AI.");
+    await sendTelegramMessage(env.BOT_TOKEN, chatId, "Sorry, I had an error talking to Gemini.");
   }
 }
 
