@@ -65,6 +65,7 @@ export default {
         if (update.message && update.message.text) {
           const text = update.message.text.trim();
           const chatId = update.message.chat.id;
+          const userId = update.message.from?.id;
 
           if (text.startsWith("/status")) {
             ctx.waitUntil(handleStatusCommand(env.BOT_TOKEN, chatId));
@@ -75,7 +76,7 @@ export default {
             const replyContext = update.message.reply_to_message?.text || update.message.reply_to_message?.caption || "";
             
             if (question || replyContext) {
-              ctx.waitUntil(handleAskCommand(env, chatId, question, replyContext));
+              ctx.waitUntil(handleAskCommand(env, chatId, userId, question, replyContext));
             } else {
               ctx.waitUntil(sendTelegramMessage(env.BOT_TOKEN, chatId, "Please ask a question! Example: `/ask How do I create a purchase?`"));
             }
@@ -104,7 +105,22 @@ async function handleStatusCommand(token: string, chatId: string | number) {
   }
 }
 
-async function handleAskCommand(env: Env, chatId: string | number, question: string, replyContext: string = "") {
+async function handleAskCommand(env: Env, chatId: string | number, userId: number, question: string, replyContext: string = "") {
+  const ADMIN_ID = 715714775;
+  const DAILY_LIMIT = 5;
+
+  if (userId !== ADMIN_ID) {
+    const today = new Date().toISOString().split("T")[0];
+    const limitKey = `ask_limit_${userId}_${today}`;
+    const currentUsage = parseInt(await env.CACHE.get(limitKey) || "0");
+
+    if (currentUsage >= DAILY_LIMIT) {
+      await sendTelegramMessage(env.BOT_TOKEN, chatId, `⚠️ <b>Limit Reached</b>\n\nYou have used your daily limit of ${DAILY_LIMIT} questions. Please try again tomorrow.`);
+      return;
+    }
+    await env.CACHE.put(limitKey, (currentUsage + 1).toString(), { expirationTtl: 86400 });
+  }
+
   if (!env.GEMINI_API_KEY) {
     await sendTelegramMessage(env.BOT_TOKEN, chatId, "The AI is currently resting. Gemini API key is missing.");
     return;
