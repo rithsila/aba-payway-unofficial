@@ -57,8 +57,10 @@ export default {
             ctx.waitUntil(triggerDocsUpdate(env, chatId));
           } else if (text.startsWith("/ask")) {
             const question = text.replace("/ask", "").trim();
-            if (question) {
-              ctx.waitUntil(handleAskCommand(env, chatId, question));
+            const replyContext = update.message.reply_to_message?.text || update.message.reply_to_message?.caption || "";
+            
+            if (question || replyContext) {
+              ctx.waitUntil(handleAskCommand(env, chatId, question, replyContext));
             } else {
               ctx.waitUntil(sendTelegramMessage(env.BOT_TOKEN, chatId, "Please ask a question! Example: `/ask How do I create a purchase?`"));
             }
@@ -87,7 +89,7 @@ async function handleStatusCommand(token: string, chatId: string | number) {
   }
 }
 
-async function handleAskCommand(env: Env, chatId: string | number, question: string) {
+async function handleAskCommand(env: Env, chatId: string | number, question: string, replyContext: string = "") {
   if (!env.GEMINI_API_KEY) {
     await sendTelegramMessage(env.BOT_TOKEN, chatId, "The AI is currently resting. Gemini API key is missing.");
     return;
@@ -101,7 +103,7 @@ async function handleAskCommand(env: Env, chatId: string | number, question: str
   const sdkRes = await fetch(SDK_DOCS_URL);
   const sdkContext = await sdkRes.text();
 
-  const promptText = `You are an expert AI assistant for the ABA PayWay Unofficial SDK community.
+  let promptText = `You are an expert AI assistant for the ABA PayWay Unofficial SDK community.
 Answer the user's question based ONLY on the provided context below. Be concise, friendly, and include code snippets if helpful.
 Format the output in clean HTML supported by Telegram (<b>, <i>, <code>, <pre>).
 
@@ -111,8 +113,13 @@ ${abaContext}
 --- UNOFFICIAL SDK DOCS ---
 ${sdkContext}
 
---- USER QUESTION ---
-${question}`;
+`;
+
+  if (replyContext) {
+    promptText += `--- PREVIOUS MESSAGE CONTEXT (User is replying to this) ---\n${replyContext}\n\n`;
+  }
+
+  promptText += `--- USER QUESTION ---\n${question}`;
 
   try {
     const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
