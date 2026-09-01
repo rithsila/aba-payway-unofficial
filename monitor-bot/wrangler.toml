@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2024-03-20"
 
 [triggers]
-crons = ["0 0 * * *"] # Runs once a day at midnight UTC
+crons = ["0 23 * * *"] # Runs once a day at 23:00 UTC (6:00 AM Cambodia time)
 
 # KV Namespace for storing the hash (we will link it in the next step)
 [[kv_namespaces]]
