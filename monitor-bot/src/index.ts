@@ -122,7 +122,12 @@ ${sdkContext}`;
         "X-Title": "ABA Monitor Bot"
       },
       body: JSON.stringify({
-        model: "google/gemma-4-31b-it:free", // using a reliable free model
+        models: [
+          "google/gemma-4-31b-it:free",
+          "nvidia/nemotron-3.5-lightning:free",
+          "liquid/lfm-2.5-2.6b:free",
+          "cohere/north-mini-code:free"
+        ], // OpenRouter will automatically fall back to the next free model if one is rate-limited!
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question }
