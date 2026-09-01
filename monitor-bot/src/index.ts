@@ -38,7 +38,22 @@ export default {
       if (url.searchParams.get("setup") === "true") {
         const webhookUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook?url=${url.origin}`;
         await fetch(webhookUrl);
-        return new Response("Webhook set successfully!");
+        
+        // Setup the slash command popup menu
+        const commandsUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/setMyCommands`;
+        await fetch(commandsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            commands: [
+              { command: "status", description: "Check ABA Sandbox status" },
+              { command: "ask", description: "Ask the AI a question" },
+              { command: "updatedocs", description: "Trigger docs scraping" }
+            ]
+          })
+        });
+
+        return new Response("Webhook and commands set successfully!");
       }
       return new Response("Worker is running.", { status: 200 });
     }
