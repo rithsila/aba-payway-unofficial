@@ -91,7 +91,8 @@ if (purchase.success) {
 const status = await aba.checkStatus(txnId);
 console.log("Payment status:", status.status); // "APPROVED" | "PENDING" | ...
 
-// 4. Verify a webhook
+// 4. Verify a webhook — see the caveat under "Webhook verification" below:
+//    this does NOT yet implement ABA's pushback signing scheme.
 const isValid = await aba.verifyWebhook(
   rawBody,
   signatureHeader,
@@ -165,7 +166,22 @@ You need ABA PayWay merchant credentials:
 | `baseUrl`       | ABA PayWay base URL (e.g.`https://checkout.payway.com.kh`) |
 | `webhookSecret` | Accepted but currently unused (see note below)             |
 
-> **`webhookSecret`:** ABA does not issue one and the SDK never reads it. ABA signs pushback with an `X-PayWay-HMAC-SHA512` header that `verifyWebhook()` supports.
+> **`webhookSecret`:** ABA does not issue one and the SDK never reads it.
+
+### Webhook verification — read before relying on it
+
+`verifyWebhook()` computes an HMAC-SHA512 over the **raw payload string** you
+pass it. That is a generic signature check, and it does **not** match how ABA
+actually signs pushback.
+
+Per ABA's documentation, pushback carries an `X-PayWay-HMAC-SHA512` header
+computed over the JSON body's **keys sorted ascending, with their values
+concatenated** — not over the raw body. Pushback fields are `tran_id`, `apv`,
+`status`, `return_params`, and `merchant_ref`.
+
+So `verifyWebhook()` will reject genuine ABA callbacks. Until this is
+implemented, confirm payments by polling `checkStatus()` — which is verified
+working — rather than trusting the callback signature.
 
 ---
 
@@ -200,6 +216,14 @@ npm run pay:sandbox
 
 It creates a $1 card purchase, opens the checkout page in your browser, and
 polls until ABA settles the transaction.
+
+For a from-scratch walkthrough — installing Node, getting credentials, and
+every check in order — see **[TESTING_GUIDE.md](TESTING_GUIDE.md)**. To produce
+a dated evidence report for ABA when requesting production access:
+
+```bash
+npm run report:sandbox
+```
 
 The switch that makes this work is **`paymentGate: 0`**. A merchant profile with
 the QR Payment API service enabled answers every purchase with KHQR JSON and

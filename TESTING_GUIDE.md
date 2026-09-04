@@ -4,28 +4,85 @@ This guide is for anyone with no coding background. You will run a few
 commands and look at what appears. Each step tells you exactly what
 "it worked" looks like, and what "something is wrong" looks like.
 
-There are 5 steps. Do them in order.
+There are 6 steps. Do them in order. Step 0 starts from a completely
+empty machine — skip it if the project already runs.
 
 ---
 
-## Before you start
+## Step 0: Set up from scratch
 
-You need one file: `.env`, with your ABA sandbox credentials in it.
+Everything here happens in a terminal. On a Mac, open **Terminal** from
+Applications → Utilities. On Windows, use **PowerShell**.
 
-1. Copy `.env.example` to a new file named `.env`.
-2. Open `.env` and fill in:
-   - `ABA_MERCHANT_ID` — the **Merchant Id** on your ABA credential sheet.
-   - `ABA_API_KEY` — the **Public Key** on your ABA credential sheet.
-   - `ABA_BASE_URL` — already filled in for you (sandbox).
-3. Leave everything else in `.env` blank.
+### 0.1 — Install Node.js
 
-Then open a terminal in this project folder and run this once:
+The project needs Node **18 or newer**. Check what you have:
+
+```bash
+node --version
+```
+
+If that prints `v18.x.x` or higher, you're set. If it says "command not
+found" or prints a lower number, install the current LTS from
+[nodejs.org](https://nodejs.org/) — take the default options — then close
+and reopen the terminal and check again.
+
+### 0.2 — Get the project
+
+If you don't already have the folder:
+
+```bash
+git clone https://github.com/rithsila/aba-payway-unofficial.git
+cd aba-payway-unofficial
+```
+
+If you do have it, just move into it:
+
+```bash
+cd path/to/aba-payway-sdk-unofficial
+```
+
+Confirm you're in the right place — this should list `package.json`:
+
+```bash
+ls
+```
+
+### 0.3 — Install the dependencies
 
 ```bash
 npm install
 ```
 
-Wait for it to finish. No errors should appear.
+Wait for it to finish. Warnings are fine; errors are not.
+
+### 0.4 — Get sandbox credentials
+
+Register at the [ABA sandbox
+portal](https://sandbox.payway.com.kh/register-sandbox/). ABA emails you a
+credential sheet with a **Merchant Id** and a **Public Key**.
+
+> The "Public Key" is not public — it is the secret key used to sign every
+> request. Never commit it or paste it into a chat.
+
+### 0.5 — Create your `.env`
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` in any text editor and fill in three values:
+
+```bash
+ABA_MERCHANT_ID=the Merchant Id from your credential sheet
+ABA_API_KEY=the Public Key from the same sheet
+ABA_BASE_URL=https://checkout-sandbox.payway.com.kh
+```
+
+Leave everything else in the file blank or commented out. `.env` is
+already in `.gitignore`, so it will not be committed.
+
+Now go to Step 1.
 
 ---
 
@@ -292,6 +349,136 @@ pay more promptly.
 
 ---
 
+## Step 6: Generate the proof for ABA (takes ~2 minutes)
+
+Steps 1–5 prove things to *you*, one command at a time, and then the
+output scrolls away. This step runs the whole battery in one go and
+writes a dated report file you can attach when you ask ABA to enable
+production.
+
+Run:
+
+```bash
+npm run report:sandbox
+```
+
+It runs 8 checks. Seven are automatic. When it reaches **T8** it opens a
+checkout page and waits for you to pay it with the Mastercard test card,
+exactly like Step 5.
+
+### ✅ It worked if you see:
+
+```
+  T1  Merchant credentials accepted (HMAC-SHA512 signature) PASS
+  T2  Invalid signature is rejected by ABA................ PASS
+  T3  KHQR purchase returns a payable EMV payload and image PASS
+  T4  ABA Mobile deeplink and app-store fallbacks returned PASS
+  T5  Transaction status is queryable and reports PENDING. PASS
+  T6  Unknown transaction is handled without crashing..... PASS
+  T7  Hosted card checkout page is reachable.............. PASS
+  T8  Card payment completes and settles as APPROVED...... PASS
+
+  8 passed · 0 failed · 0 not verified
+
+  READY — a real card payment settled as APPROVED.
+
+  Report written to:
+    .../reports/sandbox-report-20260904-091500.md
+```
+
+**`READY` is the word that matters.** The report file is what you send.
+
+To also prove the failure path, add `--with-declined` and it runs a
+ninth check using a declined test card.
+
+### ⚠️ If it says INCOMPLETE
+
+```
+  INCOMPLETE — no real payment was completed. Re-run without --skip-payment.
+```
+
+The report deliberately refuses to call itself READY unless a real
+payment settled. Re-run and finish paying the checkout page. Do not send
+an INCOMPLETE report to ABA — it states plainly on its own first page
+that the payment was never completed.
+
+### What the report contains
+
+- Your merchant ID, the sandbox URL, and a UTC timestamp.
+- Every check, what it demonstrates, and ABA's actual response.
+- **The real transaction IDs**, so ABA can look each one up in their own
+  system and confirm independently.
+- A **Scope and known gaps** section listing what was *not* tested.
+
+That last section is deliberate. Read it before sending — it is what
+keeps the report honest, and ABA's integration team will check the same
+things anyway.
+
+---
+
+## What to send ABA when requesting production
+
+1. The generated `reports/sandbox-report-*.md` file.
+2. Your sandbox **Merchant ID** (it is already in the report).
+3. Your production callback URL, and ask them to **whitelist the domain** —
+   ABA rejects a `return_url` on a non-whitelisted domain with code 81.
+4. Ask which payment options to enable on the production profile (card,
+   KHQR, ABA PAY, Alipay, WeChat).
+
+Before you send it, be aware of the gaps the report lists — in particular
+that **pushback/callback verification is not yet implemented** in this
+integration. See "Known gaps" below.
+
+---
+
+## Appendix A: ABA error codes you may hit
+
+Codes are **per endpoint** — the same number means different things in
+different places.
+
+| Code | On `purchase`              | On `check-transaction-2` | What to do                                    |
+| ---- | -------------------------- | ------------------------ | --------------------------------------------- |
+| 00   | Success                    | Success                  | Nothing.                                      |
+| 1    | Wrong hash                 | Wrong hash               | `ABA_MERCHANT_ID` / `ABA_API_KEY` don't match. |
+| 2    | Invalid transaction ID     | —                        | Max 20 chars, must be unique.                 |
+| 3    | Invalid amount             | —                        | Must be > 0.                                  |
+| 4    | Duplicate transaction ID   | —                        | Generate a new one.                           |
+| 6    | Domain not whitelisted     | `tran_id` not found      | See note below.                               |
+| 12   | Currency not allowed       | —                        | Ask ABA to enable that currency.              |
+| 21   | End of API lifetime        | End of API lifetime      | Key expired — ask ABA for a new one.          |
+| 23   | Payment option not enabled | —                        | Ask ABA to enable it on your profile.         |
+| 46   | KHR amount has decimals    | —                        | KHR must be a whole number.                   |
+| 47   | KHR amount too small       | —                        | KHR must exceed 100.                          |
+| 81   | Return URL not whitelisted | —                        | Ask ABA to whitelist your callback domain.    |
+
+> **Code 6 is two different errors.** On a status check it means the
+> transaction is unknown — and a *just-created* transaction returns it for
+> about a second before it becomes queryable, which is normal. On a
+> purchase it means your domain is not whitelisted.
+
+---
+
+## Appendix B: Known gaps
+
+Things this test suite does **not** prove. Read these before telling ABA
+you are production ready.
+
+- **Pushback / callback verification is not implemented.** ABA signs
+  pushback with an `X-PayWay-HMAC-SHA512` header, computed over the JSON
+  body's keys sorted ascending with their values concatenated.
+  `verifyWebhook()` currently hashes the raw body string instead, which
+  does not match — so it will reject genuine ABA callbacks. No callback
+  was received or validated in any test above.
+- **Refunds are untested.** `/payments/refund` returns 404 on a default
+  sandbox merchant; ABA enables it per merchant.
+- **Only USD 1.00 is exercised.** KHR amounts have their own rules
+  (whole numbers, above 100) and are not covered.
+- **3D Secure is untested.** Step 5 and T8 deliberately use the
+  non-enrolled card so no OTP is needed.
+- **Alipay, WeChat and Google Pay are untested.**
+
+---
+
 ## Quick summary — what each command does
 
 | Command                      | Talks to ABA? | What it proves                             |
@@ -301,5 +488,6 @@ pay more promptly.
 | `npm run test:sandbox`       | Yes           | The code works against ABA's real server   |
 | `npm run see:qr`             | Yes           | You get a real QR image you can look at    |
 | `npm run pay:sandbox`        | Yes           | A payment can go all the way to `APPROVED` |
+| `npm run report:sandbox`     | Yes           | All of the above, as a report file for ABA |
 
-If all 5 steps show ✅, your ABA PayWay setup is working correctly.
+If all 6 steps show ✅, your ABA PayWay setup is working correctly.

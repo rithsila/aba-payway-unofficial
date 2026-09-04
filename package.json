@@ -23,6 +23,7 @@
     "test:sandbox": "vitest run tests/integration",
     "verify:credentials": "vite-node scripts/verify-credentials.mts",
     "pay:sandbox": "vite-node scripts/pay-sandbox.mts",
+    "report:sandbox": "vite-node scripts/sandbox-report.mts",
     "see:qr": "vite-node scripts/see-qr-code.mts",
     "preview:khqr": "vite-node scripts/preview-khqr-card.mts",
     "prepare": "npm run build",
