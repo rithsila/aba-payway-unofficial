@@ -34,6 +34,11 @@ The code is split by responsibility, one concern per file in `src/`:
 
 `generateABAHash` concatenates parameters in an **exact fixed order** before HMAC-SHA512 (see the array in `hash.ts`). ABA's server rebuilds the same string and compares. If you add, remove, or reorder a field — in `hash.ts` OR in the `hashParams` object built in `client.ts` — the signature breaks and the API rejects the request. The two must always stay in sync. Missing optional fields are sent as empty strings (`?? ""`), never omitted.
 
+Two things to know before extending it:
+
+- **`hash.ts` does not match ABA's published order, and that is currently harmless.** ABA's v3 docs list no `ctid`/`pwt`, and end with five fields the SDK omits: `payout`, `lifetime`, `additional_params`, `google_pay_token`, `skip_success_page`. Since `ctid`/`pwt` are always `""` and the trailing five are always absent, both sides concatenate the identical string. **This stops being true the moment you support any of those five** — adding `lifetime` to the body without also appending it (and the four around it, in order) to `hash.ts` produces "Wrong Hash." on every request.
+- **Not every body field is hashed.** `payment_gate` and `view_type` are body-only; putting them in `hashParams` breaks the signature. They are appended to the body *after* `hash` is built in `client.ts` for exactly this reason.
+
 ### Crypto is Web Crypto, not Node `crypto`
 
 All hashing uses `crypto.subtle` + `TextEncoder` + `btoa`, never `node:crypto`. This is deliberate: the SDK must run in Node 18+, Deno, and edge runtimes. Keep it that way — do not import `node:crypto`. (This is also why `tsconfig.json` includes the `DOM` lib.) Because `crypto.subtle.sign` is async, **every function that hashes is async**, including `verifyWebhook` and `generateKHQR`.
@@ -60,6 +65,22 @@ Other shape details worth knowing:
 - `check-transaction-2` nests the detail under `data`, as `total_amount`, `payment_currency`, `transaction_date`.
 - A rejected request is HTTP **403** with the reason in a JSON envelope, so parse the body on non-2xx too. Codes: 1/5 wrong hash, 6 unknown `tran_id`, 21 expired key.
 - A freshly created `abapay_khqr` transaction returns code 6 for a second or so before it is queryable. The SDK does not retry internally, because code 6 also means a genuinely unknown transaction.
+- Error codes are **endpoint-specific**, not global. Code 6 is "tran_id not found" on `check-transaction-2` but "domain not whitelisted" on `purchase`. Don't write one shared lookup table.
+
+### Paying a sandbox transaction: `payment_gate`
+
+Sandbox KHQR cannot be scanned by the real ABA Mobile app, so `abapay_khqr` transactions stay `PENDING` forever and nothing exercises `APPROVED`/`DECLINED` or the pushback. The hosted **card** checkout is the only sandbox flow a human can finish, using the cards in `docs/ABA Test Cards.md`.
+
+`paymentOption: "cards"` alone does **not** get you there. This merchant profile has the QR Payment API service enabled, so `purchase` answers with KHQR JSON and silently ignores `payment_option`. Sending **`paymentGate: 0`** routes the request to the Checkout service, which replies **HTTP 302** to the hosted page. Verified against the live sandbox.
+
+That redirect drives two details in `client.ts`:
+
+- The purchase fetch uses `redirect: "manual"`. Following it yields the checkout page's HTML, which `parseAbaJson` reports as "the merchant ID or API key is wrong" — badly wrong advice for a request that succeeded.
+- A 3xx with a `Location` is returned as `success: true` plus `checkoutUrl`; there is no JSON body to read, so the caller polls `checkStatus` for the outcome.
+
+`view_type` changes the URL shape but not its validity: `hosted_view` is served from the root (`/<payload>`), everything else from `/checkout/<payload>`. Don't assert on the path. The page's token expires 180s after creation; the transaction stays open longer.
+
+`npm run pay:sandbox` drives the whole loop — create, open the browser, poll until ABA settles.
 
 ### The RSA key pair is unused
 

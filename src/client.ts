@@ -119,6 +119,16 @@ export class ABAPayWay {
       hash,
     });
 
+    // Body-only fields. ABA does not hash `payment_gate` or `view_type`, so
+    // they are appended after `hash` is built — adding them to hashParams
+    // would produce a signature ABA cannot rebuild. Both are omitted entirely
+    // when unset, matching the rule that ABA rejects fields it did not expect
+    // (an empty `shipping` is what makes it answer "Wrong shipping price").
+    if (request.paymentGate !== undefined) {
+      body.set("payment_gate", String(request.paymentGate));
+    }
+    if (request.viewType) body.set("view_type", request.viewType);
+
     const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/purchase`;
 
     const failure = (error: string, errorCode?: string): PurchaseResponse => ({
@@ -135,7 +145,31 @@ export class ABAPayWay {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
+        // The Checkout service answers 302 to the hosted payment page. Let it
+        // be followed and the body is that page's HTML, which parses as
+        // neither JSON nor an error worth reporting — so stop at the redirect
+        // and read the address out of it instead.
+        redirect: "manual",
       });
+
+      // A 302 is success for the Checkout service flow: the payer finishes on
+      // the page ABA points at. There is no JSON body to read, so hand back
+      // the URL and let the caller poll checkStatus for the outcome.
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) {
+          return failure(
+            `ABA PayWay redirected (HTTP ${response.status}) without a Location header.`,
+          );
+        }
+        return {
+          success: true,
+          transactionId: request.transactionId,
+          amount: request.amount,
+          currency: request.currency,
+          checkoutUrl: new URL(location, this.config.baseUrl).toString(),
+        };
+      }
 
       // A rejected request comes back as HTTP 403 with the reason in a JSON
       // status envelope ("Wrong Hash.", "End of API lifetime"). Parse it

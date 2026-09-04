@@ -134,6 +134,98 @@ describe("ABAPayWay", () => {
       expect(JSON.parse(atob(body.get("items")!))).toEqual(items);
     });
 
+    // A merchant profile with the QR Payment API service enabled answers every
+    // purchase with KHQR JSON and ignores payment_option, so "cards" never
+    // reaches a card form. payment_gate=0 routes to the Checkout service,
+    // which answers 302 to the hosted page instead.
+    describe("hosted checkout (payment_gate)", () => {
+      const redirect = (location: string | null, status = 302) => ({
+        ok: false,
+        status,
+        headers: { get: (name: string) => (name.toLowerCase() === "location" ? location : null) },
+        text: () => Promise.resolve(""),
+      });
+
+      it("sends payment_gate and view_type in the body", async () => {
+        await aba.createPurchase({
+          transactionId: "EA010", amount: 1.0, currency: "USD",
+          paymentOption: "cards", paymentGate: 0, viewType: "hosted_view",
+        });
+        const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+        expect(body.get("payment_gate")).toBe("0");
+        expect(body.get("view_type")).toBe("hosted_view");
+      });
+
+      // ABA hashes neither field. Including one would change the signature it
+      // rebuilds and every request would come back "Wrong Hash."
+      it("leaves payment_gate and view_type out of the hash", async () => {
+        await aba.createPurchase({
+          transactionId: "EA011", amount: 1.0, currency: "USD",
+          paymentOption: "cards", paymentGate: 0, viewType: "hosted_view",
+        });
+        const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+        const expected = await generateABAHash(
+          {
+            req_time: body.get("req_time")!,
+            merchant_id: "TEST_MERCHANT",
+            tran_id: "EA011",
+            amount: "1.00",
+            payment_option: "cards",
+            currency: "USD",
+          },
+          "TEST_API_KEY",
+        );
+        expect(body.get("hash")).toBe(expected);
+      });
+
+      // Omitted rather than sent empty: ABA rejects fields it did not expect.
+      it("omits both fields when they are not set", async () => {
+        await aba.createPurchase({ transactionId: "EA012", amount: 1.0, currency: "USD" });
+        const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+        expect(body.has("payment_gate")).toBe(false);
+        expect(body.has("view_type")).toBe(false);
+      });
+
+      it("returns the redirect target as checkoutUrl", async () => {
+        const page = "https://checkout-sandbox.payway.com.kh/checkout/eyJ0b2tlbiI6IngifQ%3D%3D";
+        fetchSpy.mockResolvedValueOnce(redirect(page));
+        const result = await aba.createPurchase({
+          transactionId: "EA013", amount: 1.0, currency: "USD",
+          paymentOption: "cards", paymentGate: 0,
+        });
+        expect(result.success).toBe(true);
+        expect(result.checkoutUrl).toBe(page);
+      });
+
+      it("resolves a relative Location against the base URL", async () => {
+        fetchSpy.mockResolvedValueOnce(redirect("/checkout/abc123"));
+        const result = await aba.createPurchase({
+          transactionId: "EA014", amount: 1.0, currency: "USD", paymentGate: 0,
+        });
+        expect(result.checkoutUrl).toBe("https://checkout-sandbox.payway.com.kh/checkout/abc123");
+      });
+
+      // Stopping at the redirect means the body is empty, so a missing
+      // Location leaves nothing to act on — say so rather than report success.
+      it("fails when a redirect carries no Location header", async () => {
+        fetchSpy.mockResolvedValueOnce(redirect(null));
+        const result = await aba.createPurchase({
+          transactionId: "EA015", amount: 1.0, currency: "USD", paymentGate: 0,
+        });
+        expect(result.success).toBe(false);
+        expect(result.error).toContain("without a Location header");
+      });
+
+      it("does not follow the redirect itself", async () => {
+        fetchSpy.mockResolvedValueOnce(redirect("/checkout/abc123"));
+        await aba.createPurchase({
+          transactionId: "EA016", amount: 1.0, currency: "USD", paymentGate: 0,
+        });
+        expect(fetchSpy.mock.calls[0][1].redirect).toBe("manual");
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+    });
+
     // The deeplink flow is what a mobile/mini-app checkout uses: ABA answers
     // with a link that opens ABA Mobile straight on this payment, plus store
     // links to fall back to when the app is not installed.

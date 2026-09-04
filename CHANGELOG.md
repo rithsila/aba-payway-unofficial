@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `paymentGate` and `viewType` on `PurchaseRequest`, unlocking the hosted card
+  checkout. A merchant profile with the QR Payment API service enabled answers
+  every purchase with KHQR JSON and ignores `paymentOption`; `paymentGate: 0`
+  routes to the Checkout service, which returns the page as `checkoutUrl`.
+  This is the only sandbox flow a human can pay, so it is the only way to reach
+  `APPROVED`/`DECLINED` — sandbox KHQR cannot be scanned by real ABA Mobile.
+- `npm run pay:sandbox` — creates a card purchase, opens the checkout page, and
+  polls until ABA settles it. Prints ABA's test cards.
+
+### Fixed
+- `createPurchase` no longer follows ABA's checkout redirect and misreports the
+  resulting HTML as "the merchant ID or API key is wrong".
+
 ## [1.2.0]
 
 ### Added

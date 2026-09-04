@@ -4,7 +4,7 @@ This guide is for anyone with no coding background. You will run a few
 commands and look at what appears. Each step tells you exactly what
 "it worked" looks like, and what "something is wrong" looks like.
 
-There are 4 steps. Do them in order.
+There are 5 steps. Do them in order.
 
 ---
 
@@ -217,13 +217,89 @@ ABA's side. Ask for help.
 
 ---
 
+## Step 5: Actually pay for something (takes ~1 minute)
+
+Steps 1–4 all stop at the same place: a transaction that exists but has
+never been paid. It stays `PENDING` forever, because a sandbox QR code
+**cannot** be scanned by the real ABA Mobile app — sandbox and production
+are separate on purpose.
+
+This step is the one that gets you past that. It opens a real ABA
+checkout page in your browser, and you pay it with a **test card**.
+
+Run:
+
+```bash
+npm run pay:sandbox
+```
+
+Your browser opens on ABA's checkout page. The terminal also prints the
+test cards. Type in the **Mastercard success** card:
+
+| Card number         | Exp   | CVV |
+| ------------------- | ----- | --- |
+| 5156 8399 3770 6777 | 01/30 | 993 |
+
+Use that one first — it is the only card not enrolled in 3D Secure, so it
+does not ask for an OTP code. (The other cards are listed in
+`docs/ABA Test Cards.md`, including a "declined" pair for testing the
+failure path. The 3DS ones email their OTP to the address registered on
+your ABA account.)
+
+Finish paying in the browser. Meanwhile the terminal is polling ABA.
+
+### ✅ It worked if you see:
+
+```
+  waiting for you to pay (Ctrl+C to stop)
+  12s status: APPROVED
+
+  PAID. ABA reports the transaction as APPROVED.
+     amount      1 USD
+     paid at     2026-09-04 09:15:22
+```
+
+**`APPROVED` is the word that matters.** You have now put a real sandbox
+transaction all the way through, which is the state your webhook and your
+"order paid" code need to handle.
+
+Try it again with a declined card — you should see `DECLINED` instead.
+
+### ❌ Something is wrong if you see:
+
+```
+  failed — ABA code 23: Payment option is not enabled
+```
+
+Card payment is not switched on for your merchant profile. Ask ABA to
+enable **Card Payment** on the sandbox profile — nothing in `.env` will
+fix this.
+
+```
+  ABA accepted the purchase but returned no checkout URL.
+```
+
+ABA replied with a QR code instead of a checkout page. That means
+`payment_gate` was ignored — ask for help, don't change code.
+
+```
+  Timed out after 5 minutes still PENDING.
+```
+
+The page was never paid. The checkout page itself expires after 3
+minutes, so if you took longer than that, just run the command again and
+pay more promptly.
+
+---
+
 ## Quick summary — what each command does
 
-| Command                     | Talks to ABA? | What it proves                          |
-| ---------------------------- | -------------- | ---------------------------------------- |
-| `npm run verify:credentials` | Yes            | Your `.env` values are correct           |
-| `npm test`                   | No             | The code's logic is correct              |
-| `npm run test:sandbox`       | Yes            | The code works against ABA's real server |
-| `npm run see:qr`             | Yes            | You get a real QR image you can look at  |
+| Command                      | Talks to ABA? | What it proves                             |
+| ---------------------------- | ------------- | ------------------------------------------ |
+| `npm run verify:credentials` | Yes           | Your `.env` values are correct             |
+| `npm test`                   | No            | The code's logic is correct                |
+| `npm run test:sandbox`       | Yes           | The code works against ABA's real server   |
+| `npm run see:qr`             | Yes           | You get a real QR image you can look at    |
+| `npm run pay:sandbox`        | Yes           | A payment can go all the way to `APPROVED` |
 
-If all 4 steps show ✅, your ABA PayWay setup is working correctly.
+If all 5 steps show ✅, your ABA PayWay setup is working correctly.

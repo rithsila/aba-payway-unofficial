@@ -60,6 +60,26 @@ export interface PurchaseRequest {
    */
   readonly returnDeeplink?: string | ReturnDeeplink;
   readonly paymentOption?: PaymentOption | (string & {});
+  /**
+   * Routes the request to the hosted Checkout service instead of the QR
+   * Payment API. Send `0` when your merchant profile has the QR Payment API
+   * service enabled — otherwise ABA answers every purchase with KHQR JSON and
+   * silently ignores `paymentOption`, so `"cards"` never reaches a card form.
+   *
+   * With it, ABA replies `302` to the hosted payment page and the SDK returns
+   * that address as `checkoutUrl`. This is the only sandbox flow a human can
+   * actually pay, using ABA's test cards — sandbox KHQR cannot be scanned by
+   * the real ABA Mobile app, so those transactions stay PENDING forever.
+   *
+   * Not part of the hash: ABA reads it from the body only.
+   */
+  readonly paymentGate?: 0 | 1;
+  /**
+   * How ABA renders the hosted checkout: `hosted_view` opens it as a full
+   * page, `popup` as a modal on desktop and a bottom sheet on mobile web.
+   * Only meaningful alongside `paymentGate: 0`. Not part of the hash.
+   */
+  readonly viewType?: "hosted_view" | "popup" | (string & {});
   readonly customFields?: string;
   readonly returnParams?: string;
 }
@@ -67,6 +87,11 @@ export interface PurchaseRequest {
 export interface PurchaseResponse {
   readonly success: boolean;
   readonly transactionId: string;
+  /**
+   * The hosted payment page to send the payer to. Returned for the Checkout
+   * service flow (`paymentGate: 0`), which answers `302` rather than JSON.
+   * The v3 QR API does not return one.
+   */
   readonly checkoutUrl?: string;
   /**
    * `abamobilebank://` link that opens ABA Mobile straight to this payment.

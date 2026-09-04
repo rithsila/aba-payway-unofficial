@@ -187,6 +187,38 @@ Run sandbox tests:
 npm run test:sandbox
 ```
 
+### Actually paying a sandbox transaction
+
+A sandbox KHQR code **cannot** be scanned by the real ABA Mobile app, so
+`abapay_khqr` transactions sit at `PENDING` forever. To exercise `APPROVED`,
+`DECLINED`, and your pushback handler you need the hosted **card** checkout and
+one of [ABA's test cards](docs/ABA%20Test%20Cards.md):
+
+```bash
+npm run pay:sandbox
+```
+
+It creates a $1 card purchase, opens the checkout page in your browser, and
+polls until ABA settles the transaction.
+
+The switch that makes this work is **`paymentGate: 0`**. A merchant profile with
+the QR Payment API service enabled answers every purchase with KHQR JSON and
+ignores `paymentOption`, so `"cards"` on its own never reaches a card form:
+
+```ts
+const purchase = await aba.createPurchase({
+  transactionId: generateTransactionId(),
+  amount: 1.0,
+  currency: "USD",
+  paymentOption: "cards",
+  paymentGate: 0,        // route to the Checkout service, not the QR API
+  viewType: "hosted_view",
+});
+
+// ABA answers 302; the SDK hands back the page to send the payer to.
+console.log(purchase.checkoutUrl);
+```
+
 ---
 
 ## Community & Support

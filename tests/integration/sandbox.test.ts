@@ -144,6 +144,55 @@ describe.skipIf(!hasCredentials)("ABA PayWay sandbox (live)", () => {
     20_000,
   );
 
+  // The only sandbox flow a human can actually pay. A profile with the QR
+  // Payment API service enabled answers every purchase with KHQR JSON and
+  // ignores payment_option, so "cards" alone never reaches a card form —
+  // payment_gate=0 routes to the Checkout service, which answers 302 to the
+  // hosted page. Sandbox KHQR cannot be scanned by the real ABA Mobile app,
+  // so without this there is no way to reach APPROVED at all.
+  it(
+    "creates a hosted card checkout the tester can pay with an ABA test card",
+    async () => {
+      if (credentialBroken) throw new Error(credentialBroken);
+
+      const result = await aba.createPurchase({
+        transactionId: generateTransactionId(),
+        amount: 1.0,
+        currency: "USD",
+        items: "Sandbox Card Test",
+        paymentOption: "cards",
+        paymentGate: 0,
+        viewType: "hosted_view",
+      });
+
+      const failure = explainFailure(result.errorCode, result.error);
+      // Code 23 is "payment option not enabled for the profile" — a merchant
+      // configuration problem, not a bug in the SDK.
+      if (result.errorCode === "23") {
+        throw new Error(
+          "ABA code 23: card payment is not enabled on this merchant profile. " +
+            "Ask ABA to enable Card Payment for the sandbox profile.",
+        );
+      }
+      if (failure) throw new Error(failure);
+
+      expect(result.success).toBe(true);
+      // Don't assert the path: ABA serves `view_type=hosted_view` from the
+      // root and the other view types from /checkout/, both payable.
+      expect(result.checkoutUrl).toContain(aba.config.baseUrl);
+      // The QR API shape must not come back for this flow — its presence
+      // would mean payment_gate was ignored and no card form is reachable.
+      expect(result.qrString).toBeUndefined();
+
+      // The point of this flow is that a human can open the page and pay, so
+      // prove it actually loads rather than trusting the redirect target.
+      const page = await fetch(result.checkoutUrl!);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain("PayWay - Checkout");
+    },
+    20_000,
+  );
+
   it(
     "checks status of the new transaction and reports PENDING",
     async () => {
