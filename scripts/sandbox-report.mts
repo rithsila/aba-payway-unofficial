@@ -314,7 +314,23 @@ await record(
 // 5. A real payment. This is the check ABA actually cares about.
 // ---------------------------------------------------------------------------
 
-/** Open the checkout and wait for a human to pay it with a test card. */
+/** Print the "go and pay this" block, and open the page. */
+function promptTester(
+  id: string,
+  url: string,
+  card: { number: string; exp: string; cvv: string; label: string },
+  instruction: string,
+) {
+  console.log(bold(`\n  ${id} needs you.`));
+  console.log(`  ${instruction}\n  ${url}\n`);
+  console.log(`  Use the ${bold(card.label)} card:`);
+  console.log(`     number   ${card.number}`);
+  console.log(`     expiry   ${card.exp}`);
+  console.log(`     cvv      ${card.cvv}\n`);
+  if (!noOpen) openInBrowser(url);
+}
+
+/** Open the checkout and wait for a human to pay it with the success card. */
 async function payInteractively(
   id: string,
   name: string,
@@ -322,15 +338,8 @@ async function payInteractively(
   transactionId: string,
   url: string,
   card: { number: string; exp: string; cvv: string; label: string },
-  expected: "APPROVED" | "DECLINED",
 ) {
-  console.log(bold(`\n  ${id} needs you.`));
-  console.log(`  Open and pay this page:\n  ${url}\n`);
-  console.log(`  Use the ${bold(card.label)} card:`);
-  console.log(`     number   ${card.number}`);
-  console.log(`     expiry   ${card.exp}`);
-  console.log(`     cvv      ${card.cvv}\n`);
-  if (!noOpen) openInBrowser(url);
+  promptTester(id, url, card, "Open and pay this page:");
 
   return record(id, name, proves, "POST /api/payment-gateway/v1/payments/check-transaction-2", async () => {
     const deadline = Date.now() + 5 * 60 * 1000;
@@ -341,8 +350,8 @@ async function payInteractively(
         return { outcome: "FAIL", observed: `ABA code ${s.errorCode ?? "?"}: ${s.error}`, transactionId };
       }
       if (s.success && s.status !== "PENDING") {
-        if (s.status !== expected) {
-          return { outcome: "FAIL", observed: `Expected ${expected}, ABA reported ${s.status}`, transactionId };
+        if (s.status !== "APPROVED") {
+          return { outcome: "FAIL", observed: `Expected APPROVED, ABA reported ${s.status}`, transactionId };
         }
         return {
           outcome: "PASS",
@@ -354,6 +363,74 @@ async function payInteractively(
     return { outcome: "NOT VERIFIED", observed: "Timed out after 5 minutes still PENDING — the page was never paid.", transactionId };
   });
 }
+
+/**
+ * The declined card, and why this is not the mirror image of T8.
+ *
+ * A refused card does NOT settle the transaction. ABA shows the failure on the
+ * checkout page (error 57) with a "Try Again" button and leaves the
+ * transaction open, so `check-transaction-2` keeps reporting PENDING and never
+ * reports DECLINED. Verified on the live sandbox: transaction EAMTMGVOBR7A4K
+ * was still PENDING after a refused attempt.
+ *
+ * So there is nothing to wait *for*. What is worth asserting — and what a
+ * merchant actually needs — is the negative: a refused attempt must never
+ * surface as APPROVED. Watch for a fixed window and fail if it ever does.
+ */
+async function observeDeclinedAttempt(
+  id: string,
+  transactionId: string,
+  url: string,
+  card: { number: string; exp: string; cvv: string; label: string },
+) {
+  promptTester(
+    id,
+    url,
+    card,
+    "Open this page and ATTEMPT payment — it is meant to be refused:",
+  );
+  console.log(dim("  Expect the page to show 'Payment Failed'. That is the pass condition."));
+  console.log(dim(`  Watching the transaction for ${DECLINE_OBSERVE_MS / 1000}s …\n`));
+
+  return record(
+    id,
+    "A refused card never reports APPROVED",
+    "A refused card cannot be mistaken for a successful payment. ABA leaves the transaction PENDING and open for retry rather than reporting DECLINED, so a merchant must release goods only on APPROVED — never on the absence of a failure.",
+    "POST /api/payment-gateway/v1/payments/check-transaction-2",
+    async () => {
+      const deadline = Date.now() + DECLINE_OBSERVE_MS;
+      let last = "PENDING";
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const s = await aba.checkStatus(transactionId);
+        if (!s.success && s.errorCode !== "6") {
+          return { outcome: "FAIL", observed: `ABA code ${s.errorCode ?? "?"}: ${s.error}`, transactionId };
+        }
+        if (s.success) {
+          last = s.status;
+          // The one outcome that would be a real defect.
+          if (s.status === "APPROVED") {
+            return {
+              outcome: "FAIL",
+              observed: "A refused card reported APPROVED — do not go live.",
+              transactionId,
+            };
+          }
+        }
+      }
+      return {
+        outcome: "PASS",
+        observed:
+          `Never reported APPROVED; still ${last} after ${DECLINE_OBSERVE_MS / 1000}s. ` +
+          "ABA keeps a refused transaction open for retry rather than settling it as DECLINED.",
+        transactionId,
+      };
+    },
+  );
+}
+
+/** How long to watch a refused transaction before concluding it stayed open. */
+const DECLINE_OBSERVE_MS = 45_000;
 
 const APPROVED_CARD = { number: "5156 8399 3770 6777", exp: "01/30", cvv: "993", label: "Mastercard success (no 3DS)" };
 const DECLINED_CARD = { number: "4156 8399 3770 6777", exp: "01/30", cvv: "993", label: "Visa declined (no 3DS)" };
@@ -381,7 +458,6 @@ if (skipPayment || !checkoutUrl) {
     cardTranId,
     checkoutUrl,
     APPROVED_CARD,
-    "APPROVED",
   );
 
   if (withDeclined) {
@@ -396,15 +472,7 @@ if (skipPayment || !checkoutUrl) {
       viewType: "hosted_view",
     });
     if (r.success && r.checkoutUrl) {
-      await payInteractively(
-        "T9",
-        "Declined card settles as DECLINED",
-        "A failed payment is reported back as DECLINED, so the merchant does not release goods on a failed charge.",
-        declinedTranId,
-        r.checkoutUrl,
-        DECLINED_CARD,
-        "DECLINED",
-      );
+      await observeDeclinedAttempt("T9", declinedTranId, r.checkoutUrl, DECLINED_CARD);
     }
   }
 }
@@ -496,6 +564,12 @@ Stated plainly so this report is not read as claiming more than it tested.
   implementation of that scheme. It has **not** been exercised against a real
   callback, which requires a publicly reachable \`return_url\` whitelisted on
   the merchant profile.
+- **A refused card does not settle the transaction.** ABA shows the failure on
+  the checkout page (error 57) and leaves the transaction open for retry, so
+  \`check-transaction-2\` keeps reporting PENDING and never reports DECLINED.
+  Verified on the live sandbox. A merchant must therefore settle an order only
+  on APPROVED, and must never read PENDING as "this payment failed" — the payer
+  may still retry successfully.
 - **Refunds are not available on this profile.** \`/payments/refund\` returns 404
   for a default sandbox merchant, so the refund path is untested.
 - **Amounts** are USD 1.00 throughout. Multi-currency (KHR) was not exercised.

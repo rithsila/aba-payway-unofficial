@@ -322,7 +322,21 @@ Finish paying in the browser. Meanwhile the terminal is polling ABA.
 transaction all the way through, which is the state your webhook and your
 "order paid" code need to handle.
 
-Try it again with a declined card — you should see `DECLINED` instead.
+### About the declined test card
+
+If you try the declined card, **do not expect `DECLINED` in the terminal.**
+
+ABA shows "Payment Failed" (error 57) on the checkout page and leaves the
+transaction **open for retry** — the page offers a "Try Again" button. So
+`checkStatus` keeps reporting `PENDING` and never reports `DECLINED`.
+
+That is ABA's behaviour, not a bug, and it has a direct consequence for
+your code:
+
+> **`PENDING` never means "this payment failed."** A payer who was just
+> refused can retry and succeed a minute later. Release goods only on
+> `APPROVED` — never on the absence of a failure, and never expire an
+> order because you saw a decline in the browser.
 
 ### ❌ Something is wrong if you see:
 

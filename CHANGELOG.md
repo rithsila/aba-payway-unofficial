@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Extracted `hmacSha512Base64` so request signing and pushback verification
   share one HMAC implementation.
+- The report's T9 no longer waits for `DECLINED`, which never arrives. A
+  refused card does not settle the transaction: ABA shows error 57 on the
+  checkout page and leaves it open for retry, so `check-transaction-2` keeps
+  reporting `PENDING`. T9 now asserts the negative — a refused attempt must
+  never surface as `APPROVED` — and the docs record that `PENDING` must not be
+  read as "this payment failed".
 
 ## [1.2.0]
 

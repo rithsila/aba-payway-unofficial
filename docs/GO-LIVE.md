@@ -36,9 +36,11 @@ is a thing ABA or your users will find for you.
 
 ### Not yet verified — do these before going live
 
-- [ ] **A real declined payment settles as DECLINED.** Run with
-      `--with-declined`. You need to know your code does not release goods
-      on a failed charge.
+- [ ] **A refused card never reports APPROVED.** Run with
+      `--with-declined`. Note ABA does **not** report `DECLINED`: a refused
+      card leaves the transaction PENDING and open for retry (verified —
+      transaction `EAMTMGVOBR7A4K` stayed PENDING after a refusal, error 57
+      on the checkout page only). So the thing to verify is the negative.
 - [ ] **A live pushback is received and verified.** The signing scheme is
       implemented and tested, but no callback from ABA has ever reached this
       integration. Requires a public HTTPS URL whitelisted by ABA (§3).
@@ -137,6 +139,12 @@ QR API service and you can drop the flag.
   requests/second, so a reconciliation sweep is cheap.
 - **Never trust the client.** Settle orders on a verified pushback or a
   `checkStatus()` result, never on the payer returning to your success URL.
+- **`PENDING` is not "failed".** A refused card does not settle the
+  transaction — ABA leaves it open for retry and keeps reporting `PENDING`,
+  never `DECLINED`. Do not cancel an order because a payment attempt failed
+  in the browser; the payer may retry and succeed. Only `APPROVED` is
+  terminal for your purposes, and a transaction's `lifetime` (default 30
+  days) is what eventually closes the door.
 - **A fresh transaction returns code 6 for about a second** before it is
   queryable. That is normal, and it also means "unknown transaction" — do
   not treat a single code 6 as failure.

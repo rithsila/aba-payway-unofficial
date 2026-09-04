@@ -96,6 +96,13 @@ That redirect drives two details in `client.ts`:
 
 `npm run pay:sandbox` drives the whole loop — create, open the browser, poll until ABA settles.
 
+**A refused card never reaches the API.** ABA shows the failure on the checkout page (error 57, with a "Try Again" button) and leaves the transaction **open for retry**, so `check-transaction-2` keeps reporting `PENDING` and never reports `DECLINED`. Verified on the live sandbox: transaction `EAMTMGVOBR7A4K` was still `PENDING` after a refusal.
+
+Two consequences:
+
+- Don't write a test that waits for `DECLINED` after a declined card — it will poll forever. The report's T9 asserts the negative instead: a refused attempt must never surface as `APPROVED`.
+- `PENDING` does not mean "failed". A payer who was refused can retry and succeed, so callers must settle only on `APPROVED`. `DECLINED` and `REFUNDED` remain in `PaymentStatus` because `check-transaction-2` documents them, but the card-refusal path does not produce them.
+
 ### The RSA key pair is unused
 
 ABA's credential sheet includes an RSA public and private key alongside the merchant ID and "Public Key". Nothing in this SDK uses them: purchase, check-transaction-2, and webhook verification are all HMAC-SHA512 signed with the API key. The RSA pair belongs to the payout/refund APIs, which ABA enables per merchant (`/payments/refund` is 404 on a default sandbox merchant). Do not wire RSA into the request path without a specific endpoint that needs it.
