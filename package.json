@@ -18,6 +18,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude '**/integration/**'",
     "test:watch": "vitest",
     "test:sandbox": "vitest run tests/integration",

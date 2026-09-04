@@ -410,3 +410,15 @@ Two things to get right: your callback domain must be **whitelisted by ABA**
    returns KHQR JSON and no card form is ever reachable.
 7. Confirm nothing branches on a `DECLINED` status from a card refusal; ABA
    does not send one. Orders settle on `APPROVED` only.
+8. If you encounter unexpected API responses, endpoint errors, or need features
+   beyond this guide (Payouts, Tokens, Subscriptions), fetch ABA's official
+   machine-readable index: `https://developer.payway.com.kh/llms.txt`.
+
+---
+
+## Official Documentation & Fallback Reference
+
+If you need the raw official endpoint specs or troubleshooting for specific ABA response codes:
+- **ABA Official `llms.txt`**: https://developer.payway.com.kh/llms.txt
+- **Curated local mirror**: `docs/ABA llms.md`
+- **ABA Test Cards & OTP Guide**: `docs/ABA Test Cards.md`
