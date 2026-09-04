@@ -11,7 +11,7 @@
   - លែងមានបញ្ហា Error នៅពេលទទួល Webhook Callback ពី ABA ទៀតហើយ។
 3. **បន្ថែមឧបករណ៍ជំនួយក្នុងការតេស្ត Sandbox**៖
   - `npm run pay:sandbox`៖ បង្កើតប្រតិបត្តិការកាតតេស្ត និងបើកផ្ទាំង Checkout ដោយស្វ័យប្រវត្តិដើម្បីសាកល្បងការទូទាត់។
-  - `npm run report:sandbox`៖ ដំណើរការតេស្តគ្រប់មុខងារទាំងអស់ និងទាញចេញជារបាយការណ៍ (Report) សម្រាប់យកទៅស្នើសុំបើកដំណើរការ Production (Go-Live) ជាមួយធនាគារ ABA។
+  - `npm run report:sandbox`៖ ដំណើរការតេស្តគ្រប់មុខងារទាំងអស់ និងទាញចេញជារបាយការណ៍ (Report) សម្រាប់យកទៅស្នើសុំបើកដំណើរការ Production (Go-Live)។
 4. **ជួសជុលបញ្ហា Checkout Redirect**៖
   - កែសម្រួល `createPurchase` មិនឱ្យច្រឡំកូដ Redirect ថាជាបញ្ហាខុស Merchant ID ឬ API Key ទៀតឡើយ។
 
@@ -27,6 +27,6 @@ npm install aba-payway-sdk-unofficial@latest
 
 - GitHub: [https://github.com/rithsila/aba-payway-unofficial](https://github.com/rithsila/aba-payway-unofficial)
 - NPM: [https://www.npmjs.com/package/aba-payway-sdk-unofficial](https://www.npmjs.com/package/aba-payway-sdk-unofficial)
-- ឆានែលព័ត៌មាន (Telegram Channel): [https://t.me/abapaywayunofficial](https://t.me/abapaywayunofficial)
-- ក្រុមពិភាក្សា (Telegram Group): [https://t.me/abaunofficialintegrate](https://t.me/abaunofficialintegrate)
+- Telegram Channel: [https://t.me/abapaywayunofficial](https://t.me/abapaywayunofficial)
+- Telegram Group: [https://t.me/abaunofficialintegrate](https://t.me/abaunofficialintegrate)
 

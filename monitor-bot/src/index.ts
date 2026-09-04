@@ -201,11 +201,18 @@ async function handleAnnounceCommand(env: Env, chatId: string | number, userId: 
     return;
   }
 
+  // Format for Telegram HTML
+  let tgText = announcement;
+  tgText = tgText.replace(/```[a-z]*\n([\s\S]*?)```/g, '<pre>$1</pre>');
+  tgText = tgText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  tgText = tgText.replace(/`(.*?)`/g, '<code>$1</code>');
+  tgText = tgText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
+
   // 1. Post ONLY to Telegram Channel (never to the group directly)
   let tgSuccess = false;
   let tgError = "";
   try {
-    await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, announcement);
+    await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, tgText);
     tgSuccess = true;
   } catch (err: any) {
     tgError = err.message || "Failed to send";
