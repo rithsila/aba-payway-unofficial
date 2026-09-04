@@ -1,6 +1,6 @@
 {
   "name": "aba-payway-sdk-unofficial",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Unofficial ABA PayWay payment gateway SDK for Cambodia — KHQR generation, purchase creation, status checking, and webhook verification",
   "type": "module",
   "main": "./dist/index.cjs",
