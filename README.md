@@ -239,6 +239,10 @@ a dated evidence report for ABA when requesting production access:
 npm run report:sandbox
 ```
 
+When you're ready to switch to production, work through
+**[docs/GO-LIVE.md](docs/GO-LIVE.md)** — the readiness checklist, what changes
+between sandbox and production, and what to ask ABA for.
+
 The switch that makes this work is **`paymentGate: 0`**. A merchant profile with
 the QR Payment API service enabled answers every purchase with KHQR JSON and
 ignores `paymentOption`, so `"cards"` on its own never reaches a card form:
