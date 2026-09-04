@@ -86,8 +86,9 @@ ABA_API_KEY="your_public_key"
 ABA_BASE_URL="https://checkout.payway.com.kh" # or sandbox: https://checkout-sandbox.payway.com.kh
 ```
 
-Do not add a webhook secret variable — ABA does not issue one. If you find
-one in an older example, drop it.
+Do not add a webhook secret variable — ABA does not issue one. It signs
+pushback with your API key, and `verifyWebhook()` falls back to it
+automatically. If you find a secret variable in an older example, drop it.
 
 ---
 
@@ -142,9 +143,44 @@ export async function POST(req: Request) {
 ```
 
 On the frontend, check `purchase.success` first. Then prefer `purchase.qrImage`
-(a ready-to-render PNG data URI) or `purchase.qrString` — ABA's current API
-does not reliably return `purchase.checkoutUrl`, so don't build a flow that
-assumes it's always there.
+(a ready-to-render PNG data URI) or `purchase.qrString`.
+
+`purchase.checkoutUrl` is **empty for this call**, and that is expected: the
+QR flow above does not produce a hosted page. If you need a card checkout
+page, you must ask for it explicitly — see "Card payments" below.
+
+### A2. Card payments — the `paymentGate` flag you will otherwise miss
+
+To charge a card you need ABA's hosted checkout page. Asking for
+`paymentOption: "cards"` **alone does not work**: a merchant profile with the
+QR Payment API service enabled ignores `paymentOption` entirely and answers
+every purchase with KHQR JSON. You must also send `paymentGate: 0`, which
+routes the request to the Checkout service.
+
+```typescript
+const purchase = await abaPayWay.createPurchase({
+  transactionId: generateTransactionId(),
+  amount: body.amount,
+  currency: "USD",
+  items: "Order Payment",
+  paymentOption: "cards",
+  paymentGate: 0,        // REQUIRED — without it you get KHQR JSON, not a card form
+  viewType: "hosted_view",
+  returnUrl: `${origin}/api/payway/webhook`,
+});
+
+// ABA answers HTTP 302; the SDK returns the page to send the payer to.
+return NextResponse.json({ checkoutUrl: purchase.checkoutUrl });
+```
+
+Redirect the payer to `purchase.checkoutUrl`. Do not parse or assert on its
+path — `viewType: "hosted_view"` is served from the root while other view
+types use `/checkout/`, and both are valid.
+
+`paymentGate` and `viewType` are body-only fields; they are not part of the
+request hash. The SDK handles that — never add them to a hash yourself.
+
+---
 
 ### B. Express.js (`src/routes/payment.ts`)
 ```typescript
@@ -321,6 +357,42 @@ If `status.success` is `false`, `status.errorCode` tells you why — `"6"`
 means the transaction isn't found yet (a brand-new one can take about a
 second to become queryable; retry once), `"21"` means the API key expired.
 
+**Only `APPROVED` means paid.** Treat every other status as "not yet",
+including after a payment visibly failed in the payer's browser. ABA does not
+settle a refused card: it shows the error on the checkout page and leaves the
+transaction open for retry, so `checkStatus` keeps returning `PENDING` and
+**never returns `DECLINED`** for a card refusal. Never write
+`if (status === "DECLINED") cancelOrder()` — it will not fire. Never expire an
+order because one attempt failed; the payer may retry and succeed.
+
+### Webhook (pushback) route
+
+ABA POSTs a callback to your `returnUrl` with an `X-PayWay-HMAC-SHA512`
+header. Verify it before trusting anything in the body:
+
+```typescript
+export async function POST(req: Request) {
+  const body = await req.json();
+  const signature = req.headers.get("x-payway-hmac-sha512") ?? "";
+
+  // The parsed body is fine — ABA rebuilds the signature from sorted keys
+  // and concatenated values, not from the raw bytes.
+  const isValid = await abaPayWay.verifyWebhook(body, signature);
+  if (!isValid) return new NextResponse("Invalid signature", { status: 401 });
+
+  // Confirm against the API rather than trusting the payload's status.
+  const status = await abaPayWay.checkStatus(body.tran_id);
+  if (status.status === "APPROVED") {
+    // settle the order — make this idempotent, ABA may deliver twice
+  }
+  return NextResponse.json({ received: true });
+}
+```
+
+Two things to get right: your callback domain must be **whitelisted by ABA**
+(otherwise `return_url` is rejected with code 81), and the handler must be
+**idempotent**, because the same pushback can arrive more than once.
+
 ---
 
 ## Step 7: Final Check
@@ -334,3 +406,7 @@ second to become queryable; retry once), `"21"` means the API key expired.
    check `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
 5. If you built a deeplink flow, confirm the order is marked paid only by a
    server-side `checkStatus`, never by the payer arriving at `returnDeeplink`.
+6. If you built a card flow, confirm `paymentGate: 0` is set — without it ABA
+   returns KHQR JSON and no card form is ever reachable.
+7. Confirm nothing branches on a `DECLINED` status from a card refusal; ABA
+   does not send one. Orders settle on `APPROVED` only.
