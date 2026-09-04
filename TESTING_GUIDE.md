@@ -158,7 +158,7 @@ npm test
 
 ```
  Test Files  5 passed (5)
-      Tests  53 passed (53)
+      Tests  76 passed (76)
 ```
 
 Every line above that should have a green checkmark (✓), no red ✗.
@@ -167,7 +167,7 @@ Every line above that should have a green checkmark (✓), no red ✗.
 
 ```
  Test Files  1 failed (5)
-      Tests  1 failed | 52 passed (53)
+      Tests  1 failed | 75 passed (76)
 ```
 
 Any number after "failed" that is not 0 means something broke. Copy
@@ -191,14 +191,16 @@ npm run test:sandbox
 
 ```
  ✓ ABA PayWay sandbox (live) > creates a purchase and returns a KHQR string and image
+ ✓ ABA PayWay sandbox (live) > creates an abapay_khqr_deeplink purchase and returns an ABA Mobile link
+ ✓ ABA PayWay sandbox (live) > creates a hosted card checkout the tester can pay with an ABA test card
  ✓ ABA PayWay sandbox (live) > checks status of the new transaction and reports PENDING
  ✓ ABA PayWay sandbox (live) > reports an unknown transaction as code 6 rather than throwing
 
  Test Files  1 passed (1)
-      Tests  3 passed (3)
+      Tests  5 passed (5)
 ```
 
-All 3 tests passed, no red text.
+All 5 tests passed, no red text.
 
 ### ❌ Something is wrong if you see:
 
@@ -463,12 +465,13 @@ different places.
 Things this test suite does **not** prove. Read these before telling ABA
 you are production ready.
 
-- **Pushback / callback verification is not implemented.** ABA signs
-  pushback with an `X-PayWay-HMAC-SHA512` header, computed over the JSON
-  body's keys sorted ascending with their values concatenated.
-  `verifyWebhook()` currently hashes the raw body string instead, which
-  does not match — so it will reject genuine ABA callbacks. No callback
-  was received or validated in any test above.
+- **No live callback was received.** `verifyWebhook()` now implements
+  ABA's pushback scheme (body keys sorted ascending, values concatenated,
+  HMAC-SHA512, base64, compared against `X-PayWay-HMAC-SHA512`) and is
+  covered by unit tests against an independent implementation. But no
+  test above receives a real callback from ABA, because that needs a
+  publicly reachable URL whitelisted on your merchant profile. Ask ABA to
+  whitelist your callback domain, then verify it end to end yourself.
 - **Refunds are untested.** `/payments/refund` returns 404 on a default
   sandbox merchant; ABA enables it per merchant.
 - **Only USD 1.00 is exercised.** KHR amounts have their own rules

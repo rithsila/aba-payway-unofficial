@@ -382,17 +382,115 @@ describe("ABAPayWay", () => {
     });
   });
 
+  // ABA signs pushback by sorting the JSON body's keys ascending and
+  // concatenating their VALUES (no keys, no separator), then base64 of an
+  // HMAC-SHA512 over that. It is NOT a hash of the raw body — signing the
+  // raw string rejects every genuine callback.
   describe("verifyWebhook", () => {
-    it("returns true for valid signature", async () => {
-      const payload = '{"event_type":"PAYMENT_SUCCESS"}';
-      const secret = "test_secret";
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-512" }, false, ["sign"]);
-      const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-      const validSig = btoa(String.fromCharCode(...new Uint8Array(sig)));
-      expect(await aba.verifyWebhook(payload, validSig, secret)).toBe(true);
+    const SECRET = "test_secret";
+
+    // ABA's documented pushback shape.
+    const PUSHBACK = {
+      tran_id: "EA001",
+      apv: "123456",
+      status: "0",
+      return_params: '{"order_id":"42"}',
+      merchant_ref: "",
+    } as const;
+
+    /**
+     * Independent implementation of ABA's scheme via node:crypto, so the test
+     * checks the SDK against the spec rather than against its own helper.
+     * (The SDK itself must never import node:crypto — it targets edge
+     * runtimes — but a test running only on Node may.)
+     */
+    async function abaSign(body: Record<string, unknown>, secret: string): Promise<string> {
+      const { createHmac } = await import("node:crypto");
+      const base = Object.keys(body)
+        .sort()
+        .map((k) => String(body[k] ?? ""))
+        .join("");
+      return createHmac("sha512", secret).update(base).digest("base64");
+    }
+
+    it("accepts a genuine ABA pushback signature", async () => {
+      const signature = await abaSign(PUSHBACK, SECRET);
+      expect(await aba.verifyWebhook(JSON.stringify(PUSHBACK), signature, SECRET)).toBe(true);
     });
-    it("returns false for invalid signature", async () => {
+
+    // The signature is rebuilt from parsed values, not raw bytes, so a body
+    // that arrives already parsed (Express, Hono, Next) verifies identically.
+    it("accepts an already-parsed body object", async () => {
+      const signature = await abaSign(PUSHBACK, SECRET);
+      expect(await aba.verifyWebhook({ ...PUSHBACK }, signature, SECRET)).toBe(true);
+    });
+
+    // Same reason: key order in the transmitted JSON is irrelevant because
+    // the keys get sorted before hashing.
+    it("ignores the key order of the incoming JSON", async () => {
+      const signature = await abaSign(PUSHBACK, SECRET);
+      const reordered = JSON.stringify({
+        status: PUSHBACK.status,
+        tran_id: PUSHBACK.tran_id,
+        merchant_ref: PUSHBACK.merchant_ref,
+        apv: PUSHBACK.apv,
+        return_params: PUSHBACK.return_params,
+      });
+      expect(await aba.verifyWebhook(reordered, signature, SECRET)).toBe(true);
+    });
+
+    // The bug this replaced: hashing the raw payload string.
+    it("rejects a signature computed over the raw body string", async () => {
+      const raw = JSON.stringify(PUSHBACK);
+      const { createHmac } = await import("node:crypto");
+      const rawSig = createHmac("sha512", SECRET).update(raw).digest("base64");
+      expect(await aba.verifyWebhook(raw, rawSig, SECRET)).toBe(false);
+    });
+
+    it("rejects a tampered amount", async () => {
+      const signature = await abaSign(PUSHBACK, SECRET);
+      const tampered = { ...PUSHBACK, return_params: '{"order_id":"99"}' };
+      expect(await aba.verifyWebhook(JSON.stringify(tampered), signature, SECRET)).toBe(false);
+    });
+
+    it("rejects a signature made with a different secret", async () => {
+      const signature = await abaSign(PUSHBACK, "other_secret");
+      expect(await aba.verifyWebhook(JSON.stringify(PUSHBACK), signature, SECRET)).toBe(false);
+    });
+
+    // A new field must change the signature, since the whole body is sorted
+    // and hashed rather than a fixed field list.
+    it("includes fields ABA adds beyond the documented five", async () => {
+      const extended = { ...PUSHBACK, new_field_from_aba: "x" };
+      const signature = await abaSign(extended, SECRET);
+      expect(await aba.verifyWebhook(JSON.stringify(extended), signature, SECRET)).toBe(true);
+      // ...and the same signature must not verify without that field.
+      expect(await aba.verifyWebhook(JSON.stringify(PUSHBACK), signature, SECRET)).toBe(false);
+    });
+
+    // ABA signs with the merchant API key; there is no separate secret.
+    it("falls back to the configured apiKey when no secret is passed", async () => {
+      const signature = await abaSign(PUSHBACK, TEST_CONFIG.apiKey);
+      expect(await aba.verifyWebhook(JSON.stringify(PUSHBACK), signature)).toBe(true);
+    });
+
+    it("prefers a configured webhookSecret over the apiKey", async () => {
+      const client = new ABAPayWay({ ...TEST_CONFIG, webhookSecret: "hook_secret" });
+      const signature = await abaSign(PUSHBACK, "hook_secret");
+      expect(await client.verifyWebhook(JSON.stringify(PUSHBACK), signature)).toBe(true);
+    });
+
+    it("returns false rather than throwing on a malformed body", async () => {
+      expect(await aba.verifyWebhook("not json at all", "sig", SECRET)).toBe(false);
+      expect(await aba.verifyWebhook("[1,2,3]", "sig", SECRET)).toBe(false);
+      expect(await aba.verifyWebhook("null", "sig", SECRET)).toBe(false);
+    });
+
+    it("returns false for an empty signature", async () => {
+      expect(await aba.verifyWebhook(JSON.stringify(PUSHBACK), "", SECRET)).toBe(false);
+    });
+
+    it("returns false for an invalid signature", async () => {
       expect(await aba.verifyWebhook('{"event":"test"}', "invalid", "secret")).toBe(false);
     });
   });

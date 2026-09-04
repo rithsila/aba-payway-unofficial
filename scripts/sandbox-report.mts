@@ -489,11 +489,13 @@ Stated plainly so this report is not read as claiming more than it tested.
 - **Payment methods exercised:** KHQR (\`abapay_khqr\`), ABA Mobile deeplink
   (\`abapay_khqr_deeplink\`), and hosted card checkout (\`cards\` with
   \`payment_gate=0\`). Alipay, WeChat and Google Pay were **not** tested.
-- **Pushback / callback (\`return_url\`) is NOT verified by this report.** No
-  callback was received or validated during this run. ABA signs pushback with an
-  \`X-PayWay-HMAC-SHA512\` header over the JSON body keys sorted ascending with
-  their values concatenated; this integration does not yet implement that
-  scheme, and the callback domain is not whitelisted on the merchant profile.
+- **No live pushback was received during this run.** The integration implements
+  ABA's documented pushback verification (\`X-PayWay-HMAC-SHA512\` over the JSON
+  body's keys sorted ascending with their values concatenated, HMAC-SHA512,
+  base64), and it is covered by unit tests against an independent
+  implementation of that scheme. It has **not** been exercised against a real
+  callback, which requires a publicly reachable \`return_url\` whitelisted on
+  the merchant profile.
 - **Refunds are not available on this profile.** \`/payments/refund\` returns 404
   for a default sandbox merchant, so the refund path is untested.
 - **Amounts** are USD 1.00 throughout. Multi-currency (KHR) was not exercised.

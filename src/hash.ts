@@ -1,5 +1,23 @@
 import type { HashParams } from "./types";
 
+/**
+ * Base64 of an HMAC-SHA512 digest — the one primitive ABA uses everywhere,
+ * both for request signatures and for pushback verification. Kept in one
+ * place so the two callers cannot drift apart.
+ */
+export async function hmacSha512Base64(message: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-512" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
 export async function generateABAHash(
   params: HashParams,
   publicKey: string
@@ -29,14 +47,5 @@ export async function generateABAHash(
     params.return_params ?? "",
   ].join("");
 
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(publicKey),
-    { name: "HMAC", hash: "SHA-512" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(hashString));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return hmacSha512Base64(hashString, publicKey);
 }

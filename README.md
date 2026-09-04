@@ -91,13 +91,9 @@ if (purchase.success) {
 const status = await aba.checkStatus(txnId);
 console.log("Payment status:", status.status); // "APPROVED" | "PENDING" | ...
 
-// 4. Verify a webhook — see the caveat under "Webhook verification" below:
-//    this does NOT yet implement ABA's pushback signing scheme.
-const isValid = await aba.verifyWebhook(
-  rawBody,
-  signatureHeader,
-  webhookSecret,
-);
+// 4. Verify a pushback. The secret defaults to your apiKey, which is what
+//    ABA signs with; `body` may be the raw string or the parsed object.
+const isValid = await aba.verifyWebhook(body, signatureHeader);
 
 // 5. Optionally render your own styled KHQR card (base64 SVG data URI).
 const khqrImage = await generateKHQR({
@@ -168,20 +164,38 @@ You need ABA PayWay merchant credentials:
 
 > **`webhookSecret`:** ABA does not issue one and the SDK never reads it.
 
-### Webhook verification — read before relying on it
+### Webhook verification
 
-`verifyWebhook()` computes an HMAC-SHA512 over the **raw payload string** you
-pass it. That is a generic signature check, and it does **not** match how ABA
-actually signs pushback.
+`verifyWebhook()` implements ABA's pushback scheme: the JSON body's keys are
+sorted ascending, their **values** concatenated (no keys, no separator), then
+HMAC-SHA512'd with your merchant key and base64-encoded. That is compared in
+constant time against the `X-PayWay-HMAC-SHA512` header.
 
-Per ABA's documentation, pushback carries an `X-PayWay-HMAC-SHA512` header
-computed over the JSON body's **keys sorted ascending, with their values
-concatenated** — not over the raw body. Pushback fields are `tran_id`, `apv`,
-`status`, `return_params`, and `merchant_ref`.
+```ts
+// Express, Hono, Next — a parsed body works as well as the raw string.
+const isValid = await aba.verifyWebhook(
+  req.body,
+  req.header("X-PayWay-HMAC-SHA512") ?? "",
+);
+if (!isValid) return res.status(401).end();
+```
 
-So `verifyWebhook()` will reject genuine ABA callbacks. Until this is
-implemented, confirm payments by polling `checkStatus()` — which is verified
-working — rather than trusting the callback signature.
+Three things worth knowing:
+
+- **The raw body is not required.** ABA rebuilds the signature from parsed
+  values, not raw bytes, so re-serialising the body cannot invalidate it —
+  unlike Stripe-style schemes. Key order in the incoming JSON is irrelevant too.
+- **The secret defaults to your `apiKey`.** ABA does not issue a separate
+  pushback secret. Pass one explicitly, or set `webhookSecret`, to override.
+- **It never throws.** A malformed body, a missing header, or a bad signature
+  all return `false`.
+
+Pushback fields are `tran_id`, `apv`, `status`, `return_params` and
+`merchant_ref`. The whole body is hashed rather than those five by name, so a
+field ABA adds later is included automatically.
+
+> Your callback domain must be whitelisted on your merchant profile, or ABA
+> rejects the `return_url` with code 81.
 
 ---
 

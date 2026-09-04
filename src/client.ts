@@ -5,7 +5,7 @@ import type {
   StatusResponse,
   PaymentStatus,
 } from "./types";
-import { generateABAHash } from "./hash";
+import { generateABAHash, hmacSha512Base64 } from "./hash";
 import { readAbaStatus } from "./response";
 import {
   getABATimestamp,
@@ -262,22 +262,39 @@ export class ABAPayWay {
     }
   }
 
+  /**
+   * Verify an ABA pushback (callback) against its `X-PayWay-HMAC-SHA512`
+   * header. Returns false for anything it cannot positively verify — a bad
+   * signature, a malformed body, a missing key — so a caller can branch on
+   * the result without a try/catch.
+   *
+   * `payload` may be the raw request body or the already-parsed object.
+   * Unlike most gateways, ABA's scheme rebuilds the signature from the parsed
+   * values rather than the raw bytes, so re-serialising the body on the way
+   * in cannot invalidate it. Frameworks that hand you a parsed body are fine.
+   *
+   * `secret` defaults to `webhookSecret`, then to `apiKey` — ABA does not
+   * issue a separate pushback secret, it signs with the merchant API key.
+   */
   async verifyWebhook(
-    payload: string,
+    payload: string | Record<string, unknown>,
     signature: string,
-    secret: string
+    secret?: string
   ): Promise<boolean> {
     try {
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(secret),
-        { name: "HMAC", hash: "SHA-512" },
-        false,
-        ["sign"]
+      const key = secret ?? this.config.webhookSecret ?? this.config.apiKey;
+      if (!key || !signature) return false;
+
+      const body: unknown = typeof payload === "string" ? JSON.parse(payload) : payload;
+      // A JSON array or scalar has no keys to sort; only an object can be a
+      // pushback body, and Array.isArray must be checked because arrays are
+      // objects too.
+      if (body === null || typeof body !== "object" || Array.isArray(body)) return false;
+
+      const expected = await hmacSha512Base64(
+        buildPushbackHashBase(body as Record<string, unknown>),
+        key
       );
-      const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-      const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
 
       // Constant-time comparison to prevent timing attacks
       if (expected.length !== signature.length) return false;
@@ -291,6 +308,44 @@ export class ABAPayWay {
       return false;
     }
   }
+}
+
+/**
+ * ABA signs pushback differently from API requests. A request hash uses a
+ * fixed, documented field order (see `hash.ts`); a pushback hash instead
+ * sorts the body's keys ascending and concatenates their **values** — no
+ * keys, no separator — which is PHP's `ksort()` then `$b4hash .= $value`.
+ *
+ * Sorting the whole body rather than a fixed list means a field ABA adds
+ * later is included automatically, so never narrow this to the known five
+ * (`tran_id`, `apv`, `status`, `return_params`, `merchant_ref`).
+ */
+function buildPushbackHashBase(body: Record<string, unknown>): string {
+  // Default sort is by UTF-16 code unit, which matches PHP's byte-wise
+  // string comparison for ABA's ASCII field names.
+  return Object.keys(body)
+    .sort()
+    .map((key) => stringifyPushbackValue(body[key]))
+    .join("");
+}
+
+/**
+ * ABA's reference implementation is PHP string concatenation, so values are
+ * coerced the way PHP would: a missing value contributes nothing, and only a
+ * nested array or object is JSON-encoded first.
+ *
+ * Every documented pushback field is a string — `return_params` arrives
+ * already JSON-encoded as a string — so the object branch is defensive. Note
+ * that PHP's `json_encode` escapes `/` as `\/` while `JSON.stringify` does
+ * not, so a nested object ABA adds later could disagree here.
+ */
+function stringifyPushbackValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  // PHP casts true to "1" and false to the empty string.
+  if (typeof value === "boolean") return value ? "1" : "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
 
 function toNumber(value: unknown): number | undefined {

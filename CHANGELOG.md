@@ -17,9 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `npm run pay:sandbox` — creates a card purchase, opens the checkout page, and
   polls until ABA settles it. Prints ABA's test cards.
 
+- `npm run report:sandbox` — runs the full live battery and writes a dated
+  evidence report to `reports/` for a production access request. Checks that
+  do not run are recorded as NOT VERIFIED, and the verdict only says READY
+  when a real card payment actually settled as APPROVED.
+
 ### Fixed
+- **`verifyWebhook` now implements ABA's actual pushback scheme.** It hashed
+  the raw payload string, which matches nothing ABA sends, so it rejected
+  every genuine callback. ABA sorts the JSON body's keys ascending and
+  concatenates their *values* (no keys, no separator) before HMAC-SHA512 and
+  base64. It now accepts a raw string or an already-parsed object — the
+  signature is rebuilt from parsed values, so re-serialising cannot break it —
+  and falls back to `apiKey` when no secret is given, since ABA issues no
+  separate pushback secret.
 - `createPurchase` no longer follows ABA's checkout redirect and misreports the
   resulting HTML as "the merchant ID or API key is wrong".
+- README no longer claims `verifyWebhook()` supported ABA's pushback header; it
+  contradicted `.env.example`, which said it was unimplemented.
+
+### Changed
+- Extracted `hmacSha512Base64` so request signing and pushback verification
+  share one HMAC implementation.
 
 ## [1.2.0]
 

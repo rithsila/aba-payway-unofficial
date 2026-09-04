@@ -45,6 +45,20 @@ All hashing uses `crypto.subtle` + `TextEncoder` + `btoa`, never `node:crypto`. 
 
 `verifyWebhook` uses a constant-time comparison loop to avoid timing attacks — preserve this when editing.
 
+### Pushback signing is not request signing
+
+Two different schemes, and mixing them up silently rejects every callback:
+
+- **Requests** (`hash.ts`) — a **fixed documented field order**, concatenated.
+- **Pushback** (`verifyWebhook`) — the body's keys **sorted ascending**, then their **values** concatenated (no keys, no separator), matching ABA's PHP `ksort()` + `$b4hash .= $value`.
+
+Consequences worth preserving:
+
+- Hash the **whole body**, never a fixed list of the five documented fields (`tran_id`, `apv`, `status`, `return_params`, `merchant_ref`) — sorting the body means a field ABA adds later is covered automatically.
+- The **raw body is not needed**, because the signature is rebuilt from parsed values. `verifyWebhook` therefore accepts a string or an already-parsed object, and incoming key order is irrelevant.
+- The secret is the **merchant API key**; ABA issues no separate pushback secret. `verifyWebhook` falls back `secret` → `webhookSecret` → `apiKey`.
+- Value coercion mirrors PHP: `null`/absent contributes `""`, `true` is `"1"`, objects are JSON-encoded. That last one is a latent mismatch — PHP's `json_encode` escapes `/` as `\/` and `JSON.stringify` does not — but every documented pushback field is a string, so the object branch is defensive only.
+
 ### API response convention
 
 Client methods never throw on a failed payment or HTTP error. They catch everything and return a result object with `success: false`, an `error` string, and ABA's `errorCode`. Follow this pattern for any new client method — callers expect to branch on `success`, not catch exceptions.
