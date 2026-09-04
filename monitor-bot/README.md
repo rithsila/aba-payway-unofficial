@@ -1,13 +1,11 @@
 # ABA Monitor Bot Setup Guide
 
-This guide shows how to set up the ABA Monitor Bot from zero. The bot checks ABA Payway official docs for updates. If it finds a change, it sends an alert to a Telegram channel and a Facebook Page.
+This guide shows how to set up the ABA Monitor Bot from zero. The bot answers questions about ABA PayWay using Gemini AI and checks ABA Sandbox status.
 
 ## 1. What You Need
 Before you start, you need these API keys:
 - **Telegram Bot Token** (from BotFather)
 - **Gemini API Key** (from Google AI Studio)
-- **Firecrawl API Key** (from Firecrawl.dev)
-- **Facebook Page ID & Token** (from Meta for Developers)
 
 ---
 
@@ -15,28 +13,10 @@ Before you start, you need these API keys:
 1. Open Telegram and search for `@BotFather`.
 2. Send `/newbot` and follow the steps to create your bot.
 3. Save the **Bot Token** it gives you.
-4. Create a new Telegram Channel for announcements.
-5. Add your new bot to the channel as an **Administrator**.
-6. Find your Channel ID (you can use bots like @RawDataBot or forward a message).
 
 ---
 
-## 3. Facebook Setup
-1. Create a Facebook Page at [facebook.com/pages/create](https://www.facebook.com/pages/create/).
-2. Go to [developers.facebook.com](https://developers.facebook.com/) and create a new **Business App**.
-3. In your App Dashboard, go to **Use Cases** on the left.
-4. Edit "Manage Pages" and add these permissions:
-   - `pages_manage_posts`
-   - `pages_show_list`
-   - `pages_read_engagement`
-5. Go to the top menu: **Tools** -> **Graph API Explorer**.
-6. In the **User or Page** dropdown, select your **Facebook Page**.
-7. Copy the **Page Access Token** at the top.
-8. Click **Submit** to get your **Page ID**.
-
----
-
-## 4. Cloudflare Worker Setup
+## 3. Cloudflare Worker Setup
 1. Install Cloudflare Wrangler on your computer:
    ```bash
    npm install -g wrangler
@@ -53,15 +33,24 @@ Before you start, you need these API keys:
 
 ---
 
-## 5. Add Secrets to Cloudflare
+## 4. Add Secrets to Cloudflare
 Go to your terminal in the `monitor-bot` folder and run these commands one by one. Paste the keys when asked.
 
 ```bash
 npx wrangler secret put BOT_TOKEN
 npx wrangler secret put GEMINI_API_KEY
-npx wrangler secret put FIRECRAWL_API_KEY
+
+# Optional: Facebook Page posting for announcements
 npx wrangler secret put FB_PAGE_ID
 npx wrangler secret put FB_PAGE_TOKEN
+```
+
+---
+
+## 5. Sync Docs to Cloudflare KV
+Run the sync script to download the latest docs and load them into KV:
+```bash
+npm run sync-docs
 ```
 
 ---
@@ -84,7 +73,8 @@ To make Telegram talk to your Cloudflare Worker, open this URL in your web brows
 ---
 
 ## 8. Test the Bot
-1. Go to your Cloudflare Dashboard -> **KV** -> open the `CACHE` namespace.
-2. Edit the `docs_hash` key value to `123` and save.
-3. Open Telegram and send `/updatedocs` to your bot.
-4. Check your Telegram Channel and Facebook Page for the new post!
+1. Open Telegram and chat with your bot.
+2. Send `/status` to check ABA Sandbox status.
+3. Send `/ask How do I create a purchase?` to test the AI assistant!
+4. Send `/announce <message>` to broadcast an announcement to your Telegram Channel and Facebook Page (Admin only).
+

@@ -2,19 +2,20 @@ export interface Env {
   BOT_TOKEN: string;
   OPENROUTER_API_KEY: string;
   GEMINI_API_KEY: string;
-  FIRECRAWL_API_KEY: string;
   FB_PAGE_ID: string;
   FB_PAGE_TOKEN: string;
   CACHE: KVNamespace;
 }
 
-const CHAT_ID = "-1004383349237"; // @abaunofficialintegrate
-const ABA_DOCS_URL = "https://developer.payway.com.kh/";
+import { getRelevantDocs } from "./docsMatcher";
+
+const ANNOUNCEMENT_CHANNEL = "@abapaywayunofficial";
+const ADMIN_ID = 715714775;
 const SDK_DOCS_URL = "https://raw.githubusercontent.com/rithsila/aba-payway-unofficial/main/README.md";
 
 async function sendTelegramMessage(token: string, chatId: string | number, text: string) {
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -24,14 +25,14 @@ async function sendTelegramMessage(token: string, chatId: string | number, text:
       disable_web_page_preview: true,
     }),
   });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(errText);
+  }
 }
 
 export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    if (!env.BOT_TOKEN) return;
-    await updateDocsCache(env);
-  },
-
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     if (!env.BOT_TOKEN) return new Response("Missing BOT_TOKEN", { status: 500 });
     
@@ -50,7 +51,7 @@ export default {
             commands: [
               { command: "status", description: "Check ABA Sandbox status" },
               { command: "ask", description: "Ask the AI a question" },
-              { command: "updatedocs", description: "Trigger docs scraping" }
+              { command: "announce", description: "Post announcement (Admin only)" }
             ]
           })
         });
@@ -71,8 +72,8 @@ export default {
 
           if (text.startsWith("/status")) {
             ctx.waitUntil(handleStatusCommand(env.BOT_TOKEN, chatId));
-          } else if (text.startsWith("/updatedocs")) {
-            ctx.waitUntil(triggerDocsUpdate(env, chatId));
+          } else if (text.startsWith("/announce")) {
+            ctx.waitUntil(handleAnnounceCommand(env, chatId, userId, text));
           } else if (text.startsWith("/ask")) {
             const question = text.replace("/ask", "").trim();
             const replyContext = update.message.reply_to_message?.text || update.message.reply_to_message?.caption || "";
@@ -108,7 +109,6 @@ async function handleStatusCommand(token: string, chatId: string | number) {
 }
 
 async function handleAskCommand(env: Env, chatId: string | number, userId: number, question: string, replyContext: string = "") {
-  const ADMIN_ID = 715714775;
   const DAILY_LIMIT = 5;
 
   if (userId !== ADMIN_ID) {
@@ -128,9 +128,12 @@ async function handleAskCommand(env: Env, chatId: string | number, userId: numbe
     return;
   }
 
-  let abaContext = await env.CACHE.get("aba_docs_context");
+  // Match user query and reply context to relevant docs
+  const fullQuery = (question + " " + replyContext).trim();
+  let abaContext = getRelevantDocs(fullQuery);
+
   if (!abaContext) {
-    abaContext = "No ABA Docs context cached yet. Try again later.";
+    abaContext = (await env.CACHE.get("aba_docs_context")) || "No ABA Docs context available.";
   }
 
   const sdkRes = await fetch(SDK_DOCS_URL);
@@ -155,7 +158,7 @@ ${sdkContext}
   promptText += `--- USER QUESTION ---\n${question}`;
 
   try {
-    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -182,83 +185,53 @@ ${sdkContext}
   }
 }
 
-async function triggerDocsUpdate(env: Env, chatId: string | number) {
-  await sendTelegramMessage(env.BOT_TOKEN, chatId, "🔄 Starting Firecrawl to scrape the latest ABA docs...");
-  await updateDocsCache(env);
-  await sendTelegramMessage(env.BOT_TOKEN, chatId, "✅ Firecrawl finished! The AI context is now updated.");
+async function handleAnnounceCommand(env: Env, chatId: string | number, userId: number, text: string) {
+  if (userId !== ADMIN_ID) {
+    await sendTelegramMessage(env.BOT_TOKEN, chatId, "⛔ <b>Access Denied:</b> Only the admin can post announcements.");
+    return;
+  }
+
+  const announcement = text.replace("/announce", "").trim();
+  if (!announcement) {
+    await sendTelegramMessage(
+      env.BOT_TOKEN,
+      chatId,
+      "Please enter your announcement text.\n\nExample:\n<code>/announce We released ABA PayWay SDK v1.2.0!</code>"
+    );
+    return;
+  }
+
+  // 1. Post ONLY to Telegram Channel (never to the group directly)
+  let tgSuccess = false;
+  let tgError = "";
+  try {
+    await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, announcement);
+    tgSuccess = true;
+  } catch (err: any) {
+    tgError = err.message || "Failed to send";
+  }
+
+  // 2. Post to Facebook Page (if credentials exist)
+  let fbResult = "Skipped (no Facebook secrets set)";
+  if (env.FB_PAGE_ID && env.FB_PAGE_TOKEN) {
+    fbResult = await sendFacebookPost(env.FB_PAGE_ID, env.FB_PAGE_TOKEN, announcement);
+  }
+
+  const report = `📢 <b>Announcement Report</b>\n\n` +
+    `• Telegram Channel (${ANNOUNCEMENT_CHANNEL}): ${tgSuccess ? "✅ Sent" : `❌ Error: <code>${tgError}</code>`}\n` +
+    `• Facebook Page: ${fbResult === "Success" ? "✅ Posted" : `⚠️ ${fbResult}`}`;
+
+  await sendTelegramMessage(env.BOT_TOKEN, chatId, report);
 }
 
-// Hourly cron job to scrape the latest docs and save them to KV
-async function updateDocsCache(env: Env) {
-    if (!env.FIRECRAWL_API_KEY) return;
-
-    // We send announcements to the channel instead of the group
-    const ANNOUNCEMENT_CHANNEL = "@abapaywayunofficial";
-
-    try {
-      // Scrape ABA docs using Firecrawl API
-      const res = await fetch("https://api.firecrawl.dev/v0/scrape", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.FIRECRAWL_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          url: ABA_DOCS_URL,
-          pageOptions: { onlyMainContent: true }
-        })
-      });
-
-      const data: any = await res.json();
-      const markdown = data.data?.markdown;
-
-      if (markdown) {
-        const oldHash = await env.CACHE.get("docs_hash");
-        
-        // Simple hash check
-        const encoder = new TextEncoder();
-        const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(markdown));
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const currentHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-
-        if (oldHash && oldHash !== currentHash) {
-          const oldMarkdown = await env.CACHE.get("aba_docs_context") || "";
-          const summary = await analyzeDocsChange(env.GEMINI_API_KEY, oldMarkdown, markdown);
-          
-          let tgMessage = `🚨 <b>ABA PayWay Update Detected!</b>\n\n${summary}\n\nCheck it out: <a href="${ABA_DOCS_URL}">${ABA_DOCS_URL}</a>`;
-          // Convert markdown to basic HTML for telegram
-          tgMessage = tgMessage.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-          tgMessage = tgMessage.replace(/\*(.*?)\*/g, '<i>$1</i>');
-          tgMessage = tgMessage.replace(/`(.*?)`/g, '<code>$1</code>');
-          
-          await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, tgMessage);
-          
-          if (env.FB_PAGE_ID && env.FB_PAGE_TOKEN) {
-            const fbMessage = `🚨 ABA PayWay Update Detected!\n\n${summary}\n\nCheck it out: ${ABA_DOCS_URL}`;
-            const fbResult = await sendFacebookPost(env.FB_PAGE_ID, env.FB_PAGE_TOKEN, fbMessage);
-            if (fbResult !== "Success") {
-               await sendTelegramMessage(env.BOT_TOKEN, ANNOUNCEMENT_CHANNEL, `⚠️ <b>Facebook Post Failed:</b>\n<code>${fbResult}</code>`);
-            }
-          }
-        }
-        
-        // Save both the hash for comparison and the markdown content for the AI!
-        await env.CACHE.put("docs_hash", currentHash);
-        await env.CACHE.put("aba_docs_context", markdown);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-}
-
-async function sendFacebookPost(pageId: string, token: string, message: string) {
+async function sendFacebookPost(pageId: string, token: string, message: string): Promise<string> {
   const url = `https://graph.facebook.com/v20.0/${pageId}/feed`;
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: message,
+        message,
         access_token: token
       })
     });
@@ -272,33 +245,4 @@ async function sendFacebookPost(pageId: string, token: string, message: string) 
   }
 }
 
-async function analyzeDocsChange(apiKey: string, oldText: string, newText: string): Promise<string> {
-  if (!apiKey) return "The official docs have changed, but AI analysis is unavailable.";
 
-  const promptText = `You are a technical analyst. Compare these two versions of API documentation.
-Tell me exactly what changed. 
-List new features, changed parameters, or removed services.
-Keep it short, clear, and use bullet points.
-
---- OLD DOCS ---
-${oldText}
-
---- NEW DOCS ---
-${newText}`;
-
-  try {
-    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }]
-      })
-    });
-
-    const aiData: any = await aiRes.json();
-    let reply = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
-    return reply || "The official docs have changed. (No AI summary available)";
-  } catch (err) {
-    return "The official docs have changed. (Failed to generate AI summary)";
-  }
-}
