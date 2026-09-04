@@ -29,11 +29,13 @@ is a thing ABA or your users will find for you.
 - [x] **Pushback signature verification** — implemented to ABA's scheme and
       unit-tested against an independent implementation.
 
+- [x] **A real payment settles as APPROVED.** Verified 2026-09-04:
+      transaction `EAMTMGQPZRTGQN`, USD 1.00, Mastercard `*6777`, reported
+      APPROVED by `check-transaction-2`. Report:
+      `reports/sandbox-report-20260904-043925.md` (8 passed, 0 failed).
+
 ### Not yet verified — do these before going live
 
-- [ ] **A real payment settles as APPROVED.** Run `npm run report:sandbox`
-      and complete T8. Until this passes, nothing proves money can actually
-      move. **This is the single most important item.**
 - [ ] **A real declined payment settles as DECLINED.** Run with
       `--with-declined`. You need to know your code does not release goods
       on a failed charge.
