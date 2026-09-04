@@ -160,9 +160,11 @@ You need ABA PayWay merchant credentials:
 | `merchantId`    | Your ABA PayWay merchant ID                                |
 | `apiKey`        | Your ABA PayWay API key                                    |
 | `baseUrl`       | ABA PayWay base URL (e.g.`https://checkout.payway.com.kh`) |
-| `webhookSecret` | Accepted but currently unused (see note below)             |
+| `webhookSecret` | Optional. Key for pushback verification (see below)        |
 
-> **`webhookSecret`:** ABA does not issue one and the SDK never reads it.
+> **`webhookSecret`:** ABA does not issue a separate pushback secret — it signs
+> with your API key — so leave this unset and `verifyWebhook()` will use
+> `apiKey`. Set it only if ABA gives you a distinct key.
 
 ### Webhook verification
 
