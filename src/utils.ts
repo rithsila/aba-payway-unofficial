@@ -29,8 +29,8 @@ export function formatPhoneForABA(phone: string): string {
   return cleaned;
 }
 
-export function getQRExpiration(): Date {
-  return new Date(Date.now() + 15 * 60 * 1000);
+export function getQRExpiration(minutes = 3): Date {
+  return new Date(Date.now() + minutes * 60 * 1000);
 }
 
 /**

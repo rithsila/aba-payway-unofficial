@@ -100,10 +100,17 @@ describe("encodeReturnDeeplinkForABA", () => {
 });
 
 describe("getQRExpiration", () => {
-  it("returns a date 15 minutes in the future", () => {
+  it("returns a date 3 minutes in the future by default", () => {
     const now = Date.now();
     const diff = getQRExpiration().getTime() - now;
-    expect(diff).toBeGreaterThan(14 * 60 * 1000);
-    expect(diff).toBeLessThan(16 * 60 * 1000);
+    expect(diff).toBeGreaterThan(2 * 60 * 1000);
+    expect(diff).toBeLessThan(4 * 60 * 1000);
+  });
+
+  it("supports custom minutes", () => {
+    const now = Date.now();
+    const diff = getQRExpiration(5).getTime() - now;
+    expect(diff).toBeGreaterThan(4 * 60 * 1000);
+    expect(diff).toBeLessThan(6 * 60 * 1000);
   });
 });
