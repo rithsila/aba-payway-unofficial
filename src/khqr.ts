@@ -59,9 +59,9 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
   // one: putting both `clip-path` and `transform` on the same element shifts
   // the clip rect's coordinates by that same transform, clipping away most
   // of the actual QR pattern.
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 244 407" width="244" height="407" role="img" aria-label="PayWay KHQR screen branding">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 218 316" width="218" height="316" role="img" aria-label="PayWay KHQR payment card">
   <defs>
-    <filter id="card-shadow" x="13.1325" y="94.1325" width="217.735" height="315.735" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="card-shadow" x="0" y="0" width="217.735" height="315.735" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
       <feOffset/>
@@ -71,41 +71,34 @@ export async function generateKHQR(options: KHQROptions): Promise<string> {
       <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
       <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
     </filter>
-    <clipPath id="card-clip"><path d="${CARD_SHELL_PATH}" transform="translate(13,94)"/></clipPath>
-    <clipPath id="qr-clip"><rect id="qr-area" x="50" y="218" width="144" height="144"/></clipPath>
+    <clipPath id="card-clip"><path d="${CARD_SHELL_PATH}"/></clipPath>
+    <clipPath id="qr-clip"><rect id="qr-area" x="37" y="145" width="144" height="144"/></clipPath>
   </defs>
-  <rect width="244" height="407" fill="#ffffff"/>
-  <g id="aba-pay-logo" transform="translate(24,24)" aria-label="ABA PAY Logo">
-    <rect width="196" height="31" fill="#ffffff" fill-opacity="0"/>
-    <text x="0" y="31" fill="#005b7f" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="4" textLength="86" lengthAdjust="spacingAndGlyphs">ABA</text>
-    <text x="110" y="31" fill="#00a9c8" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="1" textLength="86" lengthAdjust="spacingAndGlyphs">PAY</text>
-  </g>
+  <rect width="218" height="316" fill="#ffffff"/>
   <g filter="url(#card-shadow)">
-    <path d="${CARD_SHELL_PATH}" transform="translate(13,94)" fill="#ffffff"/>
+    <path d="${CARD_SHELL_PATH}" fill="#ffffff"/>
   </g>
   <g clip-path="url(#card-clip)">
-    <g id="khqr-header-logo" transform="translate(24,105)" aria-label="KHQR logo">
+    <g id="khqr-header-logo" transform="translate(11,11)" aria-label="KHQR logo">
       <path d="${KHQR_HEADER_BACKGROUND_PATH}" fill="${headerColor}"/>
       ${KHQR_HEADER_MARK_PATHS}
     </g>
-    <text x="50" y="169" fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="10">${safeMerchantName}</text>
-    <text x="50" y="194" fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="500">${formattedAmount}</text>
-    <line x1="24" y1="207" x2="220" y2="207" stroke="#d9d9d9" stroke-width="1.2" stroke-dasharray="4 5"/>
-    <rect x="50" y="218" width="144" height="144" fill="#ffffff"/>
+    <text x="51" y="81" fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="10">${safeMerchantName}</text>
+    <text x="51" y="108" fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="500">${formattedAmount}</text>
+    <line x1="11" y1="124" x2="207" y2="124" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4 5"/>
+    <rect x="37" y="145" width="144" height="144" fill="#ffffff"/>
     <g clip-path="url(#qr-clip)">
-      <g transform="translate(50,218) scale(0.5142857143)">
+      <g transform="translate(37,145) scale(0.5142857143)">
         ${innerQr || '<svg width="280" height="280"><rect width="280" height="280" fill="#f5f5f5"/><text x="140" y="145" text-anchor="middle" fill="#777777" font-family="Arial, Helvetica, sans-serif" font-size="16">QR Code</text></svg>'}
       </g>
     </g>
     <g aria-label="KHQR brand mark">
-      <circle cx="122" cy="290" r="17" fill="#ffffff"/>
-      <circle cx="122" cy="290" r="13" fill="${headerColor}"/>
-      <path d="M115 286h3v-3h8v3h3v8h-3v3h-8v-3h-3z" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round"/>
-      <path d="M122 286v8M118 290h8" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="109" cy="217" r="17" fill="#ffffff"/>
+      <circle cx="109" cy="217" r="13" fill="${headerColor}"/>
+      <path d="M102 213h3v-3h8v3h3v8h-3v3h-8v-3h-3z" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M109 213v8M105 217h8" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
     </g>
   </g>
-  <text x="122" y="385" text-anchor="middle" fill="#777777" font-family="Arial, Helvetica, sans-serif" font-size="11">Scan with ABA Mobile or any KHQR</text>
-  <text x="122" y="399" text-anchor="middle" fill="#777777" font-family="Arial, Helvetica, sans-serif" font-size="11">supported banking app</text>
 </svg>`;
 
   return "data:image/svg+xml;base64," + btoa(svg);

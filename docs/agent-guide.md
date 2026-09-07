@@ -251,11 +251,10 @@ There are two ways to show the QR to a customer — pick one, don't build both:
 - **Fast path**: render `qrResult.qrImage` directly in an image tag. It's
   ABA's own PNG, bare (no merchant name, amount, or branding around it).
 - **Branded card**: pass `qrResult.qrString` (the raw EMV data) through
-  `generateKHQR()` to get PayWay's screen-style KHQR branding: ABA PAY logo,
-  safe spacing, KHQR header, merchant name, formatted amount, center badge,
-  fixed QR placement, and scan instruction as one base64 SVG data URI. Use
-  this when the QR is shown on its own, such as a checkout page, kiosk display,
-  or printed counter stand.
+  `generateKHQR()` to get PayWay's KHQR card frame with the KHQR header,
+  merchant name, formatted amount, center badge, and fixed QR placement as one
+  base64 SVG data URI. Use this when the QR is shown on its own, such as a
+  checkout page, kiosk display, or printed counter stand.
 
 ```typescript
 import { generateKHQR } from "aba-payway-sdk-unofficial";
