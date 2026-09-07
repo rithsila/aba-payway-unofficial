@@ -60,9 +60,14 @@ describe("generateKHQR", () => {
     expect(svg).toContain('aria-label="PayWay KHQR screen branding"');
     expect(svg).toContain('id="aba-pay-logo"');
     expect(svg).toContain('width="196" height="31"');
+    expect(svg).toContain("M189.868 10.8675H27.8677");
+    expect(svg).toContain('stdDeviation="5.43375"');
     expect(svg).toContain(">ABA<");
     expect(svg).toContain(">PAY<");
-    expect(svg).toContain(">KHQR<");
+    expect(svg).toContain('id="khqr-header-logo"');
+    expect(svg).toContain('aria-label="KHQR logo"');
+    expect(svg).toContain("M178.91 0C188.299");
+    expect(svg).not.toContain(">KHQR<");
     expect(svg).toContain(">Coffee Khlaing<");
     expect(svg).toContain('stroke-dasharray="4 5"');
     expect(svg).toContain('id="qr-area" x="50" y="218" width="144" height="144"');
