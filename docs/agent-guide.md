@@ -238,7 +238,7 @@ export async function POST(req: Request) {
     });
 
     // qrResult.qrImage is a bare, unbranded PNG data URI straight from ABA —
-    // ready for <img src>, but see the "branded card" option below.
+    // ready for an image tag, but see the "branded card" option below.
     return NextResponse.json(qrResult);
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -248,13 +248,14 @@ export async function POST(req: Request) {
 
 There are two ways to show the QR to a customer — pick one, don't build both:
 
-- **Fast path**: render `qrResult.qrImage` directly in an `<img>` tag. It's
+- **Fast path**: render `qrResult.qrImage` directly in an image tag. It's
   ABA's own PNG, bare (no merchant name, amount, or branding around it).
 - **Branded card**: pass `qrResult.qrString` (the raw EMV data) through
-  `generateKHQR()` to get a styled, self-contained card — merchant name,
-  formatted amount, a "Scan • Pay • Done" viewfinder frame around the QR,
-  and a footer — as one base64 SVG data URI. Use this when the QR is shown
-  on its own (a checkout page, a printed counter stand), not the bare image.
+  `generateKHQR()` to get PayWay's screen-style KHQR branding: ABA PAY logo,
+  safe spacing, KHQR header, merchant name, formatted amount, center badge,
+  fixed QR placement, and scan instruction as one base64 SVG data URI. Use
+  this when the QR is shown on its own, such as a checkout page, kiosk display,
+  or printed counter stand.
 
 ```typescript
 import { generateKHQR } from "aba-payway-sdk-unofficial";
@@ -267,7 +268,7 @@ const cardImage = await generateKHQR({
   // headerColor?: e.g. "#0057b8" to match your brand instead of the default red
 });
 
-// cardImage is `data:image/svg+xml;base64,...` — ready for <img src>.
+// cardImage is `data:image/svg+xml;base64,...` — ready for an image tag.
 ```
 
 `generateKHQR` is a standalone utility: it doesn't call ABA's API itself, so
