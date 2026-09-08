@@ -365,6 +365,21 @@ transaction open for retry, so `checkStatus` keeps returning `PENDING` and
 `if (status === "DECLINED") cancelOrder()` — it will not fire. Never expire an
 order because one attempt failed; the payer may retry and succeed.
 
+### Cancelling an unpaid transaction (`closeTransaction`)
+
+If your app handles time-limited checkouts, flash sales, or booking cancellations, use `closeTransaction()` to cancel an unpaid transaction before payment completes. Once closed, ABA rejects any subsequent incoming payment, and `checkStatus()` returns `"CANCELLED"`:
+
+```typescript
+const result = await abaPayWay.closeTransaction(transactionId);
+if (result.success) {
+  // Transaction cancelled successfully (status.code "00")
+  console.log("Transaction closed:", result.transactionId);
+} else {
+  // e.g. code "5" (Transaction not found or already closed)
+  console.error(`Close failed (${result.code}):`, result.error);
+}
+```
+
 ### Webhook (pushback) route
 
 ABA POSTs a callback to your `returnUrl` with an `X-PayWay-HMAC-SHA512`
@@ -401,9 +416,10 @@ Two things to get right: your callback domain must be **whitelisted by ABA**
 2. Ensure TypeScript types compile without errors (`npm run build` or `npx tsc --noEmit`).
 3. Never expose `ABA_API_KEY` to the client/browser bundle.
 4. Only call methods that actually exist: `createPurchase`, `checkStatus`,
-   and `verifyWebhook` on `ABAPayWay`, plus the standalone `generateKHQR` and
-   `generateTransactionId` exports. Don't invent method names — if unsure,
-   check `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
+   `closeTransaction`, and `verifyWebhook` on `ABAPayWay`, plus the standalone
+   `generateKHQR` and `generateTransactionId` exports. Don't invent method
+   names — if unsure, check
+   `node_modules/aba-payway-sdk-unofficial/dist/index.d.ts`.
 5. If you built a deeplink flow, confirm the order is marked paid only by a
    server-side `checkStatus`, never by the payer arriving at `returnDeeplink`.
 6. If you built a card flow, confirm `paymentGate: 0` is set — without it ABA
