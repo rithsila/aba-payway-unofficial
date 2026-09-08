@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ABAPayWay } from "../src/client";
-import { generateABAHash } from "../src/hash";
+import { generateABAHash, hmacSha512Base64 } from "../src/hash";
 
 const TEST_CONFIG = {
   merchantId: "TEST_MERCHANT",
@@ -370,6 +370,18 @@ describe("ABAPayWay", () => {
       expect(result.error).toBe("tran_id not found");
     });
 
+    it("reports CANCELLED for a cancelled transaction", async () => {
+      const payload = {
+        data: { payment_status: "CANCELLED", total_amount: 1.0, payment_currency: "USD" },
+        status: { code: "00", message: "Success!" },
+      };
+      fetchSpy.mockResolvedValueOnce({
+        ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)),
+      });
+      const result = await aba.checkStatus("EA007");
+      expect(result.status).toBe("CANCELLED");
+    });
+
     it("still reads the legacy flat status shape", async () => {
       const legacy = { status: 0, description: "APPROVED", payment_status: "APPROVED", amount: "15.00" };
       fetchSpy.mockResolvedValueOnce({
@@ -379,6 +391,113 @@ describe("ABAPayWay", () => {
       expect(result.success).toBe(true);
       expect(result.status).toBe("APPROVED");
       expect(result.amount).toBe(15.0);
+    });
+  });
+
+  describe("closeTransaction", () => {
+    let fetchSpy: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      const payload = {
+        status: { code: "00", message: "Success!", tran_id: "EA001" },
+      };
+      fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(payload)),
+        json: () => Promise.resolve(payload),
+      });
+      vi.stubGlobal("fetch", fetchSpy);
+    });
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    it("closes transaction successfully with code 00", async () => {
+      const result = await aba.closeTransaction("EA001");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy.mock.calls[0][0]).toBe(
+        "https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/close-transaction"
+      );
+      expect(fetchSpy.mock.calls[0][1].method).toBe("POST");
+      expect(fetchSpy.mock.calls[0][1].headers).toEqual({
+        "Content-Type": "application/json",
+      });
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      expect(body.merchant_id).toBe("TEST_MERCHANT");
+      expect(body.tran_id).toBe("EA001");
+      expect(body.req_time).toBeTruthy();
+      expect(body.hash).toBeTruthy();
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe("EA001");
+      expect(result.code).toBe("00");
+      expect(result.message).toBe("Success!");
+    });
+
+    it("generates correct hash for close-transaction request", async () => {
+      await aba.closeTransaction("EA001");
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+      const expectedHash = await hmacSha512Base64(
+        `${body.req_time}${TEST_CONFIG.merchantId}EA001`,
+        TEST_CONFIG.apiKey
+      );
+      expect(body.hash).toBe(expectedHash);
+    });
+
+    it("reports error when transaction not found or already closed (code 5)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              status: { code: "5", message: "Transaction not found" },
+            })
+          ),
+      });
+      const result = await aba.closeTransaction("EA002");
+      expect(result.success).toBe(false);
+      expect(result.transactionId).toBe("EA002");
+      expect(result.code).toBe("5");
+      expect(result.message).toBe("Transaction not found");
+      expect(result.error).toBe("Transaction not found");
+    });
+
+    it("reports wrong hash rejection (code 1)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ status: { code: "1", message: "Wrong hash" } })
+          ),
+      });
+      const result = await aba.closeTransaction("EA003");
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("1");
+      expect(result.message).toBe("Wrong hash");
+      expect(result.error).toBe("Wrong hash");
+    });
+
+    it("returns error when transactionId is missing", async () => {
+      const result = await aba.closeTransaction("");
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("transactionId is required");
+    });
+
+    it("reports missing parameters error from API response", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              status: { code: "2", message: "Missing required parameter" },
+            })
+          ),
+      });
+      const result = await aba.closeTransaction("EA004");
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("2");
+      expect(result.message).toBe("Missing required parameter");
+      expect(result.error).toBe("Missing required parameter");
     });
   });
 

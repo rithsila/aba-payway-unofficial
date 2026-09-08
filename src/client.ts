@@ -3,6 +3,7 @@ import type {
   PurchaseRequest,
   PurchaseResponse,
   StatusResponse,
+  CloseTransactionResponse,
   PaymentStatus,
 } from "./types";
 import { generateABAHash, hmacSha512Base64 } from "./hash";
@@ -262,6 +263,62 @@ export class ABAPayWay {
     }
   }
 
+  async closeTransaction(transactionId: string): Promise<CloseTransactionResponse> {
+    const failure = (
+      error: string,
+      code?: string,
+      message?: string
+    ): CloseTransactionResponse => ({
+      success: false,
+      transactionId: transactionId ?? "",
+      code,
+      message: message ?? error,
+      error,
+    });
+
+    if (!transactionId || !transactionId.trim()) {
+      return failure("transactionId is required");
+    }
+
+    const reqTime = getABATimestamp();
+    const hash = await hmacSha512Base64(
+      `${reqTime}${this.config.merchantId}${transactionId}`,
+      this.config.apiKey
+    );
+
+    const body = JSON.stringify({
+      req_time: reqTime,
+      merchant_id: this.config.merchantId,
+      tran_id: transactionId,
+      hash,
+    });
+
+    const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/close-transaction`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) return failure(parsed.error);
+
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) return failure(status.message, status.code || undefined, status.message);
+
+      return {
+        success: true,
+        transactionId: parsed.data?.status?.tran_id ?? transactionId,
+        code: status.code,
+        message: status.message,
+      };
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
   /**
    * Verify an ABA pushback (callback) against its `X-PayWay-HMAC-SHA512`
    * header. Returns false for anything it cannot positively verify — a bad
@@ -369,6 +426,7 @@ function mapPaymentStatus(raw: string | undefined): PaymentStatus {
   if (normalized === "APPROVED") return "APPROVED";
   if (normalized === "DECLINED") return "DECLINED";
   if (normalized === "REFUNDED") return "REFUNDED";
+  if (normalized === "CANCELLED" || normalized === "CANCELED") return "CANCELLED";
   if (normalized === "PENDING") return "PENDING";
   return "ERROR";
 }

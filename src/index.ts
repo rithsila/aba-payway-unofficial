@@ -17,6 +17,7 @@ export type {
   PurchaseRequest,
   PurchaseResponse,
   StatusResponse,
+  CloseTransactionResponse,
   PaymentStatus,
   KHQROptions,
   HashParams,

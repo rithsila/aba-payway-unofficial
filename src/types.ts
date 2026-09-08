@@ -126,7 +126,16 @@ export type PaymentStatus =
   | "APPROVED"
   | "DECLINED"
   | "REFUNDED"
+  | "CANCELLED"
   | "ERROR";
+
+export interface CloseTransactionResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
 
 export interface StatusResponse {
   readonly success: boolean;

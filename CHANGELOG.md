@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [released]
+## [1.3.0]
+
+### Added
+
+- `closeTransaction(transactionId)` method on `ABAPayWay` class to cancel unpaid transactions via ABA Close Transaction API (`POST /api/payment-gateway/v1/payments/close-transaction`).
+- `CloseTransactionResponse` interface exported from SDK root.
+- `"CANCELLED"` status added to `PaymentStatus` type and mapped from ABA's status response in `checkStatus()`.
+
+## [1.2.2]
+
+### Changed
+
+- Rendered KHQR card without outer branding according to PayWay guidelines.
+
+## [1.2.1]
 
 ### Added
 
