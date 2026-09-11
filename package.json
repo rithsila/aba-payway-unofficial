@@ -27,6 +27,7 @@
     "report:sandbox": "vite-node scripts/sandbox-report.mts",
     "see:qr": "vite-node scripts/see-qr-code.mts",
     "preview:khqr": "vite-node scripts/preview-khqr-card.mts",
+    "test:new-features": "vite-node scripts/test-new-features.mts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
