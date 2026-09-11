@@ -22,6 +22,13 @@ export type {
   CloseTransactionResponse,
   RefundRequest,
   RefundResponse,
+  CurrencyRate,
+  ExchangeRatesResponse,
+  TransactionOperation,
+  TransactionDetailResponse,
+  TransactionListFilter,
+  TransactionListItem,
+  TransactionListResponse,
   KHQROptions,
   HashParams,
 } from "./types";

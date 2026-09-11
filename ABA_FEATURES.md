@@ -14,9 +14,9 @@ Last updated: September 2026 (SDK v1.4.0)
 | **Check Transaction** | `POST /api/payment-gateway/v1/payments/check-transaction-2` | ✅ Implemented | `client.checkStatus()` — checks status within 7 days (`APPROVED`, `PENDING`, `DECLINED`, `REFUNDED`, `CANCELLED`). |
 | **Close Transaction** | `POST /api/payment-gateway/v1/payments/close-transaction` | ✅ Implemented | `client.closeTransaction()` — cancels unpaid transactions before payment completion. |
 | **Refund API** | `POST /api/merchant-portal/merchant-access/online-transaction/refund` | ✅ Implemented | `client.refund()` — full & partial refunds for KHQR, ABA PAY, Cards within 30 days. Uses RSA chunk encryption. |
-| **Get Transaction Details** | `POST /api/merchant-portal/merchant-access/online-transaction/view` | ❌ Not Implemented | Retrieves transaction history and operations for transactions older than 7 days. |
-| **Get Transaction List** | `POST /api/merchant-portal/merchant-access/online-transaction/list` | ❌ Not Implemented | Filter and retrieve paginated transaction lists by date range and amount. |
-| **Exchange Rate** | `POST /api/payment-gateway/v1/payments/exchange-rate` | ❌ Not Implemented | Fetch live currency exchange rates directly from ABA Bank. |
+| **Get Transaction Details** | `POST /api/payment-gateway/v1/payments/transaction-detail` | ✅ Implemented | `client.getTransactionDetail()` — retrieves full history, masked account, bank name, and operation log for any past transaction. |
+| **Get Transaction List** | `POST /api/payment-gateway/v1/payments/transaction-list-2` | ✅ Implemented | `client.listTransactions()` — retrieves paginated list of transactions filtered by date range (max 3 days), amount, and status. |
+| **Exchange Rate** | `POST /api/payment-gateway/v1/exchange-rate` | ✅ Implemented | `client.getExchangeRates()` — fetches live daily buy & sell foreign exchange rates directly from ABA Bank. |
 
 ---
 
@@ -89,11 +89,11 @@ For marketplaces, platforms, and aggregators splitting revenue to third parties 
 ## Summary & Roadmap
 
 - **Total ABA APIs**: 20 endpoints
-- **Implemented in SDK**: 4 core payment endpoints (Purchase, Check, Close, Refund) + 8 utility helpers
-- **Remaining to Implement**: 16 endpoints across Tokenization, Payment Links, Pre-auth, Payout, and Reporting.
+- **Implemented in SDK**: 7 core payment endpoints (**Ecommerce Checkout is 100% complete!**) + 8 utility helpers
+- **Remaining to Implement**: 13 endpoints across Tokenization (Credentials on File), Payment Links, Pre-auth, and Payout.
 
 ### Recommended Next Priorities
 
-1. **Exchange Rate API** (`exchange-rate`): Simple `POST`, allows merchants to auto-convert USD / KHR before checkout.
-2. **Get Transaction Details** (`online-transaction/view`): Completes history tracking for payments older than 7 days.
-3. **Payment Links API** (`create-payment-link`): Enables invoices and quick payment link generation for chat/social selling.
+1. **Payment Links API** (`create-payment-link`, `get-payment-link-details`): Enables invoices and quick payment link generation for chat/social selling.
+2. **Credentials on File / Recurring** (`link-card`, `payment`): Allows saving customer cards for 1-click and subscription checkout.
+3. **Pre-authorization** (`complete-pre-auth-transactions`, `cancel-pre-purchase-transaction`): Allows temporary authorization holds and delayed capture.

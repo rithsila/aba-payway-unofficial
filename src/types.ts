@@ -173,6 +173,104 @@ export interface StatusResponse {
   readonly errorCode?: string;
 }
 
+export interface CurrencyRate {
+  readonly buy: string;
+  readonly sell: string;
+}
+
+export interface ExchangeRatesResponse {
+  readonly success: boolean;
+  readonly rates?: Record<string, CurrencyRate>;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface TransactionOperation {
+  readonly status: string;
+  readonly amount: number;
+  readonly transactionDate: string;
+  readonly bankRef?: string;
+}
+
+export interface TransactionDetailResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly status: PaymentStatus;
+  readonly statusCode?: number;
+  readonly originalAmount?: number;
+  readonly originalCurrency?: string;
+  readonly paymentAmount?: number;
+  readonly paymentCurrency?: string;
+  readonly totalAmount?: number;
+  readonly refundAmount?: number;
+  readonly discountAmount?: number;
+  readonly apv?: string;
+  readonly transactionDate?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly bankRef?: string;
+  readonly paymentType?: string;
+  readonly payerAccount?: string;
+  readonly bankName?: string;
+  readonly cardSource?: string;
+  readonly operations?: readonly TransactionOperation[];
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface TransactionListFilter {
+  /** Format: YYYY-MM-DD HH:mm:ss. Defaults to today at 00:00:00 */
+  readonly fromDate?: string;
+  /** Format: YYYY-MM-DD HH:mm:ss. Max 3 days from fromDate */
+  readonly toDate?: string;
+  readonly fromAmount?: number;
+  readonly toAmount?: number;
+  /** e.g. "APPROVED", "REFUNDED", "PENDING", or comma-separated */
+  readonly status?: string;
+  /** Page index (default: "1") */
+  readonly page?: number | string;
+  /** Records per page (default: "40", max: 1000) */
+  readonly pagination?: number | string;
+}
+
+export interface TransactionListItem {
+  readonly transactionId: string;
+  readonly transactionDate: string;
+  readonly apv?: string;
+  readonly paymentStatus: PaymentStatus;
+  readonly paymentStatusCode?: number;
+  readonly originalAmount?: number;
+  readonly originalCurrency?: string;
+  readonly totalAmount?: number;
+  readonly discountAmount?: number;
+  readonly refundAmount?: number;
+  readonly paymentAmount?: number;
+  readonly paymentCurrency?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly bankRef?: string;
+  readonly payerAccount?: string;
+  readonly bankName?: string;
+  readonly cardSource?: string;
+  readonly paymentType?: string;
+}
+
+export interface TransactionListResponse {
+  readonly success: boolean;
+  readonly transactions: readonly TransactionListItem[];
+  readonly page?: string;
+  readonly pagination?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
 export interface KHQROptions {
   readonly emvData: string;
   readonly amount: number;

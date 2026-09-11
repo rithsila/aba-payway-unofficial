@@ -32,8 +32,14 @@ export function readAbaStatus(data: unknown): AbaStatus {
     const nested = raw as Record<string, unknown>;
     code = nested.code == null ? "" : String(nested.code);
     message = firstString(nested.message, body.description);
-  } else {
+  } else if (raw !== undefined) {
     code = raw == null ? "" : String(raw);
+    message = firstString(body.description, body.message);
+  } else if (body.code !== undefined) {
+    code = String(body.code);
+    message = firstString(body.message, body.description);
+  } else {
+    code = "";
     message = firstString(body.description, body.message);
   }
 

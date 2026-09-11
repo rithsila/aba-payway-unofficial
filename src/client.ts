@@ -6,6 +6,13 @@ import type {
   CloseTransactionResponse,
   RefundRequest,
   RefundResponse,
+  CurrencyRate,
+  ExchangeRatesResponse,
+  TransactionOperation,
+  TransactionDetailResponse,
+  TransactionListFilter,
+  TransactionListItem,
+  TransactionListResponse,
   PaymentStatus,
 } from "./types";
 import { generateABAHash, hmacSha512Base64 } from "./hash";
@@ -408,6 +415,258 @@ export class ABAPayWay {
         totalRefunded: toNumber(parsed.data?.total_refunded),
         currency: parsed.data?.currency,
         transactionStatus: parsed.data?.transaction_status,
+        code: status.code,
+        message: status.message,
+      };
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async getExchangeRates(): Promise<ExchangeRatesResponse> {
+    const failure = (error: string, code?: string): ExchangeRatesResponse => ({
+      success: false,
+      error,
+      code,
+    });
+
+    const reqTime = getABATimestamp();
+    const hash = await hmacSha512Base64(
+      `${reqTime}${this.config.merchantId}`,
+      this.config.apiKey
+    );
+
+    const body = JSON.stringify({
+      req_time: reqTime,
+      merchant_id: this.config.merchantId,
+      hash,
+    });
+
+    const url = `${this.config.baseUrl}/api/payment-gateway/v1/exchange-rate`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) return failure(parsed.error);
+
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) return failure(status.message, status.code || undefined);
+
+      const rates: Record<string, CurrencyRate> = {};
+      const collectRates = (obj: unknown) => {
+        if (!obj || typeof obj !== "object") return;
+        for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+          if (
+            val &&
+            typeof val === "object" &&
+            "buy" in val &&
+            "sell" in val
+          ) {
+            rates[key.toLowerCase()] = {
+              buy: String((val as any).buy),
+              sell: String((val as any).sell),
+            };
+          }
+        }
+      };
+
+      collectRates(parsed.data);
+      collectRates(parsed.data?.exchange_rates);
+
+      return {
+        success: true,
+        rates,
+        code: status.code,
+        message: status.message,
+      };
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async getTransactionDetail(transactionId: string): Promise<TransactionDetailResponse> {
+    const failure = (
+      error: string,
+      code?: string,
+      message?: string
+    ): TransactionDetailResponse => ({
+      success: false,
+      transactionId: transactionId ?? "",
+      status: "ERROR",
+      code,
+      message: message ?? error,
+      error,
+    });
+
+    if (!transactionId || !transactionId.trim()) {
+      return failure("transactionId is required");
+    }
+
+    const reqTime = getABATimestamp();
+    const hash = await hmacSha512Base64(
+      `${reqTime}${this.config.merchantId}${transactionId}`,
+      this.config.apiKey
+    );
+
+    const body = JSON.stringify({
+      req_time: reqTime,
+      merchant_id: this.config.merchantId,
+      tran_id: transactionId,
+      hash,
+    });
+
+    const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/transaction-detail`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) return failure(parsed.error);
+
+      const detail = parsed.data?.data ?? parsed.data ?? {};
+      const status = readAbaStatus(detail?.status ?? parsed.data?.status);
+      if (!status.ok) {
+        return failure(status.message, status.code || undefined, status.message);
+      }
+
+      const operations: TransactionOperation[] = Array.isArray(
+        detail.transaction_operations
+      )
+        ? detail.transaction_operations.map((op: any) => ({
+            status: String(op.status ?? ""),
+            amount: toNumber(op.amount) ?? 0,
+            transactionDate: String(op.transaction_date ?? ""),
+            bankRef: op.bank_ref ? String(op.bank_ref) : undefined,
+          }))
+        : [];
+
+      return {
+        success: true,
+        transactionId: String(detail.transaction_id ?? transactionId),
+        status: mapPaymentStatus(detail.payment_status),
+        statusCode:
+          typeof detail.payment_status_code === "number"
+            ? detail.payment_status_code
+            : undefined,
+        originalAmount: toNumber(detail.original_amount),
+        originalCurrency: detail.original_currency ? String(detail.original_currency) : undefined,
+        paymentAmount: toNumber(detail.payment_amount),
+        paymentCurrency: detail.payment_currency ? String(detail.payment_currency) : undefined,
+        totalAmount: toNumber(detail.total_amount),
+        refundAmount: toNumber(detail.refund_amount),
+        discountAmount: toNumber(detail.discount_amount),
+        apv: detail.apv ? String(detail.apv) : undefined,
+        transactionDate: detail.transaction_date ? String(detail.transaction_date) : undefined,
+        firstName: detail.first_name ? String(detail.first_name) : undefined,
+        lastName: detail.last_name ? String(detail.last_name) : undefined,
+        email: detail.email ? String(detail.email) : undefined,
+        phone: detail.phone ? String(detail.phone) : undefined,
+        bankRef: detail.bank_ref ? String(detail.bank_ref) : undefined,
+        paymentType: detail.payment_type ? String(detail.payment_type) : undefined,
+        payerAccount: detail.payer_account ? String(detail.payer_account) : undefined,
+        bankName: detail.bank_name ? String(detail.bank_name) : undefined,
+        cardSource: detail.card_source ? String(detail.card_source) : undefined,
+        operations: operations.length > 0 ? operations : undefined,
+        code: status.code,
+        message: status.message,
+      };
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async listTransactions(
+    filter: TransactionListFilter = {}
+  ): Promise<TransactionListResponse> {
+    const failure = (error: string, code?: string): TransactionListResponse => ({
+      success: false,
+      transactions: [],
+      error,
+      code,
+    });
+
+    const reqTime = getABATimestamp();
+    const fromDate = filter.fromDate ?? "";
+    const toDate = filter.toDate ?? "";
+    const fromAmount = filter.fromAmount !== undefined ? String(filter.fromAmount) : "";
+    const toAmount = filter.toAmount !== undefined ? String(filter.toAmount) : "";
+    const statusVal = filter.status ?? "";
+    const page = filter.page !== undefined ? String(filter.page) : "1";
+    const pagination = filter.pagination !== undefined ? String(filter.pagination) : "40";
+
+    const hashSequence = `${reqTime}${this.config.merchantId}${fromDate}${toDate}${fromAmount}${toAmount}${statusVal}${page}${pagination}`;
+    const hash = await hmacSha512Base64(hashSequence, this.config.apiKey);
+
+    const body = JSON.stringify({
+      req_time: reqTime,
+      merchant_id: this.config.merchantId,
+      from_date: fromDate || null,
+      to_date: toDate || null,
+      from_amount: fromAmount || null,
+      to_amount: toAmount || null,
+      status: statusVal || null,
+      page,
+      pagination,
+      hash,
+    });
+
+    const url = `${this.config.baseUrl}/api/payment-gateway/v1/payments/transaction-list-2`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) return failure(parsed.error);
+
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) return failure(status.message, status.code || undefined);
+
+      const rawItems = Array.isArray(parsed.data?.data) ? parsed.data.data : [];
+      const transactions: TransactionListItem[] = rawItems.map((item: any) => ({
+        transactionId: String(item.transaction_id ?? ""),
+        transactionDate: String(item.transaction_date ?? ""),
+        apv: item.apv ? String(item.apv) : undefined,
+        paymentStatus: mapPaymentStatus(item.payment_status),
+        paymentStatusCode:
+          typeof item.payment_status_code === "number"
+            ? item.payment_status_code
+            : undefined,
+        originalAmount: toNumber(item.original_amount),
+        originalCurrency: item.original_currency ? String(item.original_currency) : undefined,
+        totalAmount: toNumber(item.total_amount),
+        discountAmount: toNumber(item.discount_amount),
+        refundAmount: toNumber(item.refund_amount),
+        paymentAmount: toNumber(item.payment_amount),
+        paymentCurrency: item.payment_currency ? String(item.payment_currency) : undefined,
+        firstName: item.first_name ? String(item.first_name) : undefined,
+        lastName: item.last_name ? String(item.last_name) : undefined,
+        email: item.email ? String(item.email) : undefined,
+        phone: item.phone ? String(item.phone) : undefined,
+        bankRef: item.bank_ref ? String(item.bank_ref) : undefined,
+        payerAccount: item.payer_account ? String(item.payer_account) : undefined,
+        bankName: item.bank_name ? String(item.bank_name) : undefined,
+        cardSource: item.card_source ? String(item.card_source) : undefined,
+        paymentType: item.payment_type ? String(item.payment_type) : undefined,
+      }));
+
+      return {
+        success: true,
+        transactions,
+        page: parsed.data?.page ? String(parsed.data.page) : page,
+        pagination: parsed.data?.pagination ? String(parsed.data.pagination) : pagination,
         code: status.code,
         message: status.message,
       };

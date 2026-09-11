@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `refund(request)` method on `ABAPayWay` class to issue full and partial refunds for completed transactions via ABA PayWay Refund API (`POST /api/merchant-portal/merchant-access/online-transaction/refund`).
 - Support for KHQR immediate transaction refunds (announced by ABA in March 2026), alongside ABA PAY, Card, WeChat Pay, and Alipay.
 - RSA chunk encryption utility (`encryptRsaChunks`) with PKCS#1 v1.5 padding and Base64 output in `src/rsa.ts` for ABA `merchant_auth` payload.
+- `getExchangeRates()` method on `ABAPayWay` class to fetch live ABA Bank foreign currency exchange rates (`POST /api/payment-gateway/v1/exchange-rate`).
+- `getTransactionDetail(transactionId)` method on `ABAPayWay` class to fetch deep historical transaction details and lifecycle operations older than 7 days (`POST /api/payment-gateway/v1/payments/transaction-detail`).
+- `listTransactions(filter)` method on `ABAPayWay` class to query paginated transactions by date range, amounts, and statuses (`POST /api/payment-gateway/v1/payments/transaction-list-2`).
 - `rsaPublicKey` optional configuration added to `ABAConfig` and `RefundRequest`.
-- `RefundRequest` and `RefundResponse` types exported from SDK root.
+- `RefundRequest`, `RefundResponse`, `CurrencyRate`, `ExchangeRatesResponse`, `TransactionOperation`, `TransactionDetailResponse`, `TransactionListFilter`, `TransactionListItem`, and `TransactionListResponse` types exported from SDK root.
 
 ## [1.3.0]
 
