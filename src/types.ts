@@ -3,6 +3,7 @@ export interface ABAConfig {
   readonly apiKey: string;
   readonly baseUrl: string;
   readonly webhookSecret?: string;
+  readonly rsaPublicKey?: string;
 }
 
 export interface PurchaseItem {
@@ -132,6 +133,29 @@ export type PaymentStatus =
 export interface CloseTransactionResponse {
   readonly success: boolean;
   readonly transactionId: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface RefundRequest {
+  readonly transactionId: string;
+  readonly refundAmount: number;
+  /**
+   * RSA public key in PEM format.
+   * If not provided here, ABAPayWay uses config.rsaPublicKey.
+   */
+  readonly rsaPublicKey?: string;
+}
+
+export interface RefundResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly refundAmount: number;
+  readonly grandTotal?: number;
+  readonly totalRefunded?: number;
+  readonly currency?: string;
+  readonly transactionStatus?: string;
   readonly code?: string;
   readonly message?: string;
   readonly error?: string;

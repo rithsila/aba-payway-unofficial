@@ -1,6 +1,7 @@
 export { ABAPayWay } from "./client";
 export { generateKHQR } from "./khqr";
 export { generateABAHash } from "./hash";
+export { encryptRsaChunks, formatRsaPublicKey } from "./rsa";
 export {
   generateTransactionId,
   getABATimestamp,
@@ -17,8 +18,10 @@ export type {
   PurchaseRequest,
   PurchaseResponse,
   StatusResponse,
-  CloseTransactionResponse,
   PaymentStatus,
+  CloseTransactionResponse,
+  RefundRequest,
+  RefundResponse,
   KHQROptions,
   HashParams,
 } from "./types";

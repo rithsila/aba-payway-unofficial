@@ -4,10 +4,13 @@ import type {
   PurchaseResponse,
   StatusResponse,
   CloseTransactionResponse,
+  RefundRequest,
+  RefundResponse,
   PaymentStatus,
 } from "./types";
 import { generateABAHash, hmacSha512Base64 } from "./hash";
 import { readAbaStatus } from "./response";
+import { encryptRsaChunks } from "./rsa";
 import {
   getABATimestamp,
   formatPhoneForABA,
@@ -311,6 +314,100 @@ export class ABAPayWay {
       return {
         success: true,
         transactionId: parsed.data?.status?.tran_id ?? transactionId,
+        code: status.code,
+        message: status.message,
+      };
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async refund(request: RefundRequest): Promise<RefundResponse> {
+    const failure = (
+      error: string,
+      code?: string,
+      message?: string
+    ): RefundResponse => ({
+      success: false,
+      transactionId: request?.transactionId ?? "",
+      refundAmount: request?.refundAmount ?? 0,
+      code,
+      message: message ?? error,
+      error,
+    });
+
+    if (!request?.transactionId || !request.transactionId.trim()) {
+      return failure("transactionId is required");
+    }
+
+    if (
+      typeof request?.refundAmount !== "number" ||
+      !Number.isFinite(request.refundAmount) ||
+      request.refundAmount <= 0
+    ) {
+      return failure("refundAmount must be a positive number");
+    }
+
+    const rsaPublicKey = request.rsaPublicKey ?? this.config.rsaPublicKey;
+    if (!rsaPublicKey || !rsaPublicKey.trim()) {
+      return failure(
+        "RSA public key is required for refund. Provide rsaPublicKey in config or request."
+      );
+    }
+
+    const reqTime = getABATimestamp();
+
+    let merchantAuth: string;
+    try {
+      const authPayload = JSON.stringify({
+        mc_id: this.config.merchantId,
+        tran_id: request.transactionId,
+        refund_amount: request.refundAmount,
+      });
+      merchantAuth = encryptRsaChunks(authPayload, rsaPublicKey);
+    } catch (err) {
+      return failure(
+        err instanceof Error ? err.message : "RSA encryption failed"
+      );
+    }
+
+    const hash = await hmacSha512Base64(
+      `${reqTime}${this.config.merchantId}${merchantAuth}`,
+      this.config.apiKey
+    );
+
+    const body = JSON.stringify({
+      request_time: reqTime,
+      merchant_id: this.config.merchantId,
+      merchant_auth: merchantAuth,
+      hash,
+    });
+
+    const url = `${this.config.baseUrl}/api/merchant-portal/merchant-access/online-transaction/refund`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const parsed = await parseAbaJson(response);
+      if (parsed.error) return failure(parsed.error);
+
+      const status = readAbaStatus(parsed.data);
+      if (!status.ok) {
+        return failure(status.message, status.code || undefined, status.message);
+      }
+
+      return {
+        success: true,
+        transactionId: request.transactionId,
+        refundAmount: request.refundAmount,
+        grandTotal: toNumber(parsed.data?.grand_total),
+        totalRefunded: toNumber(parsed.data?.total_refunded),
+        currency: parsed.data?.currency,
+        transactionStatus: parsed.data?.transaction_status,
         code: status.code,
         message: status.message,
       };
