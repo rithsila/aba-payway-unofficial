@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0]
+
+### Added
+
+- `refund(request)` method on `ABAPayWay` class to issue full and partial refunds for completed transactions via ABA PayWay Refund API (`POST /api/merchant-portal/merchant-access/online-transaction/refund`).
+- Support for KHQR immediate transaction refunds (announced by ABA in March 2026), alongside ABA PAY, Card, WeChat Pay, and Alipay.
+- RSA chunk encryption utility (`encryptRsaChunks`) with PKCS#1 v1.5 padding and Base64 output in `src/rsa.ts` for ABA `merchant_auth` payload.
+- `rsaPublicKey` optional configuration added to `ABAConfig` and `RefundRequest`.
+- `RefundRequest` and `RefundResponse` types exported from SDK root.
+
 ## [1.3.0]
 
 ### Added
