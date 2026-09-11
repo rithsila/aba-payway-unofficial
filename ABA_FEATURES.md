@@ -86,6 +86,18 @@ For marketplaces, platforms, and aggregators splitting revenue to third parties 
 
 ---
 
+## 7. Sandbox Test Runners & CLI Verification
+
+| Command | Purpose | Verification Result |
+| :--- | :--- | :---: |
+| `npm run test:new-features` | Live E2E test runner for Exchange Rates, Transaction List, Transaction Detail, and Refund | ✅ Verified Live on Sandbox |
+| `npm test` | Vitest unit test suite (8 test suites, 103 tests) | ✅ 103/103 Passing |
+| `npm run verify:credentials` | Preflight credential verification on sandbox | ✅ Verified Live |
+| `npm run pay:sandbox` | Interactive hosted card purchase & polling test | ✅ Verified Live |
+| `npm run report:sandbox` | Production access readiness evidence reporter | ✅ Verified Live |
+
+---
+
 ## Summary & Roadmap
 
 - **Total ABA APIs**: 20 endpoints
