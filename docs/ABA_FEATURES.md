@@ -2,7 +2,7 @@
 
 Complete checklist of all official ABA PayWay features from the [ABA Developer Suite](https://developer.payway.com.kh/overview-865678m0) and their implementation status in `aba-payway-sdk-unofficial`.
 
-Last updated: September 2026 (SDK v1.4.0)
+Last updated: September 2026 (SDK v1.5.0)
 
 ---
 

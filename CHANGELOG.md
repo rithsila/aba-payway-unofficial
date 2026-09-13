@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-14
+
+### Added
+
+- **100% Full ABA PayWay API Suite Coverage**: Achieved complete support for all 20 official ABA PayWay endpoints.
+- **Payment Links API**:
+  - `createPaymentLink(request)` to generate shareable payment links with title, amount, return URL, image attachment, and payout splitting (`POST /api/merchant-portal/merchant-access/payment-link/create`).
+  - `getPaymentLinkDetails(request)` to retrieve real-time status and link metadata (`POST /api/merchant-portal/merchant-access/payment-link/detail`).
+- **Pre-authorization (Hold & Capture) API**:
+  - `completePreAuth(request)` to capture funds after authorized hold, supporting optional third-party payout splitting (`POST /api/merchant-portal/merchant-access/online-transaction/pre-auth-completion`).
+  - `cancelPreAuth(request)` to release temporary hold on customer payment methods (`POST /api/merchant-portal/merchant-access/online-transaction/pre-auth-cancellation`).
+- **Transactions by Reference API**:
+  - `getTransactionsByRef(request)` to look up purchase transactions using custom merchant reference numbers (`POST /api/payment-gateway/v1/payments/get-transactions-by-mc-ref`).
+- **Credentials on File (Tokenization) API**:
+  - `linkAccount(request)` for direct ABA account linking via SMS OTP (`POST /api/payment-gateway/v2/direct-payment/merchant/account/link`).
+  - `linkCard(request)` to generate hosted card tokenization HTML forms.
+  - `chargeToken(request)` to charge stored credentials for repeat purchases, subscriptions, or pre-authorizations with 3D Secure fallback (`POST /api/payment-gateway/v2/direct-payment/merchant/credentials/charge`).
+  - `getTokenDetails(request)`, `renewToken(request)`, and `removeToken(request)` to inspect, renew, and revoke stored tokens.
+- **Payout & Funds Route API**:
+  - `addPayoutBeneficiary(request)` to pre-register recipient ABA bank accounts or merchant IDs to the payout whitelist (`POST /api/merchant-portal/merchant-access/whitelist-account/add-whitelist-payout`).
+  - `updatePayoutBeneficiaryStatus(request)` to activate (`1`) or disable (`0`) whitelisted beneficiaries (`POST /api/merchant-portal/merchant-access/whitelist-account/update-whitelist-status`).
+  - `createPayout(request)` to execute atomic payout splitting to up to 10 beneficiaries in a single call (`POST /api/payment-gateway/v2/direct-payment/merchant/payout`).
+- **Cryptographic & Utility Helpers**:
+  - `hmacSha512Hex(message, secret)` for generating lowercase hexadecimal HMAC-SHA512 digests required by ABA Payout API.
+  - Enhanced `formatRsaPublicKey(key)` to automatically normalize escaped `\n` newlines from environment strings.
+  - Exported all new types and interfaces for the 20 PayWay APIs.
+  - Extended live sandbox test runner (`scripts/test-new-features.mts`) to test all 10 API suites live against ABA sandbox.
+
 ## [1.4.0]
 
 ### Added
