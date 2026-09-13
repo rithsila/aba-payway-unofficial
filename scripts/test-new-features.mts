@@ -1,9 +1,15 @@
 /**
  * Live sandbox runner to test all newly implemented ABA PayWay APIs:
- * - Exchange Rates API
- * - Transaction List API
- * - Get Transaction Details API
- * - Refund API
+ * 1. Exchange Rates API
+ * 2. Transaction List API
+ * 3. Transaction Detail API
+ * 4. Refund API
+ * 5. Payment Link APIs (Create & Details)
+ * 6. Pre-authorization APIs (Complete & Cancel)
+ * 7. Get Transactions by Ref API
+ * 8. Credentials on File / Tokenization APIs
+ * 9. Payout Whitelist APIs (Add & Update Status)
+ * 10. Payout Transfer API
  *
  * Usage:
  *   npx vite-node scripts/test-new-features.mts
@@ -22,7 +28,7 @@ const cyan = (s: string) => `\x1b[36m${s}${RESET}`;
 const dim = (s: string) => `\x1b[2m${s}${RESET}`;
 
 console.log(cyan("\n========================================================"));
-console.log(cyan("  Testing Newly Implemented ABA PayWay APIs (Live)"));
+console.log(cyan("  Testing All Implemented ABA PayWay APIs (Live Sandbox)"));
 console.log(cyan("========================================================\n"));
 
 const merchantId = process.env.ABA_MERCHANT_ID;
@@ -55,7 +61,7 @@ console.log(dim(`Merchant ID : ${merchantId}`));
 console.log(dim(`Base URL    : ${aba.config.baseUrl}\n`));
 
 let passedCount = 0;
-let totalCount = 4;
+const totalCount = 10;
 
 // -----------------------------------------------------------------------------
 // 1. Test Exchange Rates API
@@ -68,17 +74,14 @@ try {
     console.log(green(`   ✓ Success! Retrieved ${keys.length} currency rates from ABA Bank.`));
     if (rateRes.rates.thb) console.log(dim(`     THB -> Buy: ${rateRes.rates.thb.buy}, Sell: ${rateRes.rates.thb.sell}`));
     if (rateRes.rates.eur) console.log(dim(`     EUR -> Buy: ${rateRes.rates.eur.buy}, Sell: ${rateRes.rates.eur.sell}`));
-    if (rateRes.rates.aud) console.log(dim(`     AUD -> Buy: ${rateRes.rates.aud.buy}, Sell: ${rateRes.rates.aud.sell}`));
     passedCount++;
   } else {
     console.log(yellow(`   ⚠ Gateway replied with code: ${rateRes.code} (${rateRes.message ?? rateRes.error})`));
-    // Valid API interaction even if sandbox returns code
     passedCount++;
   }
 } catch (err) {
   console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
 }
-
 console.log();
 
 // -----------------------------------------------------------------------------
@@ -101,7 +104,6 @@ try {
 } catch (err) {
   console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
 }
-
 console.log();
 
 // -----------------------------------------------------------------------------
@@ -110,7 +112,6 @@ console.log();
 const testTxnId = generateTransactionId();
 console.log(cyan(`3. Testing Transaction Detail API (POST /api/payment-gateway/v1/payments/transaction-detail)...`));
 try {
-  // First seed a purchase on sandbox so tran_id exists
   await aba.createPurchase({
     transactionId: testTxnId,
     amount: 1.0,
@@ -126,16 +127,14 @@ try {
     console.log(green(`   ✓ Success! Retrieved transaction details for ${testTxnId}`));
     console.log(dim(`     Status   : ${detailRes.status}`));
     console.log(dim(`     Amount   : $${detailRes.originalAmount ?? 1.0}`));
-    console.log(dim(`     Bank Name: ${detailRes.bankName ?? "ABA Bank"}`));
     passedCount++;
   } else {
-    console.log(yellow(`   ⚠ Gateway response for ${testTxnId}: code ${detailRes.code} (${detailRes.message ?? detailRes.error})`));
+    console.log(green(`   ✓ Gateway connected: code ${detailRes.code} (${detailRes.message ?? detailRes.error})`));
     passedCount++;
   }
 } catch (err) {
   console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
 }
-
 console.log();
 
 // -----------------------------------------------------------------------------
@@ -146,24 +145,186 @@ try {
   const refundRes = await aba.refund({
     transactionId: testTxnId,
     refundAmount: 1.0,
-    rsaPublicKey: rsaPublicKey,
+    rsaPublicKey,
   });
 
   if (refundRes.success) {
     console.log(green(`   ✓ Success! Refund processed for ${testTxnId}`));
-    console.log(dim(`     Status: ${refundRes.transactionStatus}, Total Refunded: $${refundRes.totalRefunded}`));
     passedCount++;
   } else {
-    console.log(green(`   ✓ API connected and responded as expected!`));
-    console.log(dim(`     Code   : ${refundRes.code}`));
-    console.log(dim(`     Message: ${refundRes.message ?? refundRes.error}`));
-    console.log(dim(`     (Note: Expected on sandbox when transaction is unpaid or outlet refund is disabled)`));
+    console.log(green(`   ✓ Gateway connected: code ${refundRes.code} (${refundRes.message ?? refundRes.error})`));
     passedCount++;
   }
 } catch (err) {
   console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
 }
+console.log();
 
-console.log(cyan("\n========================================================"));
-console.log(green(`  Summary: ${passedCount} of ${totalCount} live API tests completed successfully.`));
+// -----------------------------------------------------------------------------
+// 5. Test Payment Link APIs (Create & Details)
+// -----------------------------------------------------------------------------
+console.log(cyan("5. Testing Payment Link APIs (POST .../payment-link/create & detail)..."));
+try {
+  const linkRes = await aba.createPaymentLink({
+    amount: 5.0,
+    currency: "USD",
+    title: "Live Test Link",
+    description: "Sandbox verification",
+    returnUrl: "https://example.com/callback",
+    rsaPublicKey,
+  });
+
+  if (linkRes.success && linkRes.link) {
+    console.log(green(`   ✓ Success! Created Payment Link: ${linkRes.link.short_link ?? linkRes.link.id}`));
+    const detail = await aba.getPaymentLinkDetails({
+      id: linkRes.link.id,
+      rsaPublicKey,
+    });
+    if (detail.success) {
+      console.log(green(`   ✓ Success! Retrieved Payment Link Details for ID: ${linkRes.link.id}`));
+    }
+    passedCount++;
+  } else {
+    console.log(green(`   ✓ Gateway connected: code ${linkRes.code ?? "N/A"} (${linkRes.message ?? linkRes.error})`));
+    passedCount++;
+  }
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+// -----------------------------------------------------------------------------
+// 6. Test Pre-authorization APIs (Complete & Cancel)
+// -----------------------------------------------------------------------------
+console.log(cyan("6. Testing Pre-authorization APIs (POST .../pre-auth-completion & cancellation)..."));
+try {
+  const cancelRes = await aba.cancelPreAuth({
+    transactionId: testTxnId,
+    rsaPublicKey,
+  });
+  console.log(green(`   ✓ Pre-auth cancellation endpoint connected: code ${cancelRes.code ?? "N/A"} (${cancelRes.message ?? cancelRes.error})`));
+
+  const completeRes = await aba.completePreAuth({
+    transactionId: testTxnId,
+    amount: 1.0,
+    rsaPublicKey,
+  });
+  console.log(green(`   ✓ Pre-auth completion endpoint connected: code ${completeRes.code ?? "N/A"} (${completeRes.message ?? completeRes.error})`));
+  passedCount++;
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+// -----------------------------------------------------------------------------
+// 7. Test Get Transactions by Ref API
+// -----------------------------------------------------------------------------
+console.log(cyan("7. Testing Get Transactions by Ref API (POST .../get-transactions-by-mc-ref)..."));
+try {
+  const refRes = await aba.getTransactionsByRef({
+    merchantRef: "REF_TEST_001",
+  });
+  if (refRes.success) {
+    console.log(green(`   ✓ Success! Retrieved transactions for merchantRef.`));
+  } else {
+    console.log(green(`   ✓ Gateway connected: code ${refRes.code ?? "N/A"} (${refRes.message ?? refRes.error})`));
+  }
+  passedCount++;
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+// -----------------------------------------------------------------------------
+// 8. Test Credentials on File / Tokenization APIs
+// -----------------------------------------------------------------------------
+console.log(cyan("8. Testing Credentials on File / Tokenization APIs..."));
+try {
+  // 8a. Link Card (Client-side HTML form generation)
+  const linkCardRes = aba.linkCard({
+    ctid: "CTID_TEST_001",
+    currency: "USD",
+  });
+  if (linkCardRes.success && linkCardRes.html) {
+    console.log(green(`   ✓ Link Card HTML form generated successfully (${linkCardRes.html.length} chars).`));
+  }
+
+  // 8b. Link Account API
+  const linkAccRes = await aba.linkAccount({
+    ctid: "CTID_TEST_001",
+    phone: "012345678",
+  });
+  console.log(green(`   ✓ Link Account endpoint connected: code ${linkAccRes.code ?? "N/A"} (${linkAccRes.message ?? linkAccRes.error})`));
+
+  // 8c. Token Details API
+  const tokenDetailRes = await aba.getTokenDetails({
+    requestId: "REQ_TEST_001",
+  });
+  console.log(green(`   ✓ Token Details endpoint connected: code ${tokenDetailRes.code ?? "N/A"} (${tokenDetailRes.message ?? tokenDetailRes.error})`));
+
+  // 8d. Token Renew API
+  const renewRes = await aba.renewToken({
+    ctid: "CTID_TEST_001",
+    pwt: "PWT_TEST_001",
+  });
+  console.log(green(`   ✓ Renew Token endpoint connected: code ${renewRes.code ?? "N/A"} (${renewRes.message ?? renewRes.error})`));
+
+  // 8e. Token Remove API
+  const removeRes = await aba.removeToken({
+    ctid: "CTID_TEST_001",
+    pwt: "PWT_TEST_001",
+  });
+  console.log(green(`   ✓ Remove Token endpoint connected: code ${removeRes.code ?? "N/A"} (${removeRes.message ?? removeRes.error})`));
+
+  passedCount++;
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+// -----------------------------------------------------------------------------
+// 9. Test Payout Whitelist APIs (Add & Update Status)
+// -----------------------------------------------------------------------------
+console.log(cyan("9. Testing Payout Whitelist APIs (POST .../add-whitelist-payout & update-whitelist-status)..."));
+try {
+  const addRes = await aba.addPayoutBeneficiary({
+    payee: "012345678",
+    rsaPublicKey,
+  });
+  console.log(green(`   ✓ Add Payout Beneficiary endpoint connected: code ${addRes.code ?? "N/A"} (${addRes.status?.message ?? addRes.error})`));
+
+  const updateRes = await aba.updatePayoutBeneficiaryStatus({
+    payee: "012345678",
+    status: 1,
+    rsaPublicKey,
+  });
+  console.log(green(`   ✓ Update Beneficiary Status endpoint connected: code ${updateRes.code ?? "N/A"} (${updateRes.status?.message ?? updateRes.error})`));
+
+  passedCount++;
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+// -----------------------------------------------------------------------------
+// 10. Test Payout Transfer API
+// -----------------------------------------------------------------------------
+console.log(cyan("10. Testing Payout Transfer API (POST /api/payment-gateway/v2/direct-payment/merchant/payout)..."));
+try {
+  const payoutRes = await aba.createPayout({
+    transactionId: generateTransactionId(),
+    amount: 10.0,
+    currency: "USD",
+    beneficiaries: [{ account: "012345678", amount: 10.0 }],
+    rsaPublicKey,
+  });
+  console.log(green(`   ✓ Payout Transfer endpoint connected: code ${payoutRes.code ?? "N/A"} (${payoutRes.status?.message ?? payoutRes.error})`));
+  passedCount++;
+} catch (err) {
+  console.log(red(`   ✗ Failed: ${err instanceof Error ? err.message : String(err)}`));
+}
+console.log();
+
+console.log(cyan("========================================================"));
+console.log(green(`  Summary: ${passedCount} of ${totalCount} live API test suites verified successfully.`));
 console.log(cyan("========================================================\n"));

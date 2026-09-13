@@ -44,6 +44,7 @@ const aba = new ABAPayWay({
   merchantId: merchantId!,
   apiKey: apiKey!,
   baseUrl: baseUrl!,
+  rsaPublicKey: process.env.ABA_RSA_PUBLIC_KEY,
   webhookSecret: process.env.ABA_WEBHOOK_SECRET,
 });
 
@@ -53,8 +54,10 @@ console.log(`  base url     ${aba.config.baseUrl}`);
 if (aba.config.baseUrl !== baseUrl!.trim().replace(/\/+$/, "")) {
   console.log(dim(`               (reduced from ${baseUrl})`));
 }
-if (process.env.ABA_RSA_PRIVATE_KEY || process.env.ABA_RSA_PUBLIC_KEY) {
-  console.log(dim("  rsa keys     set, but unused by this SDK (payout/refund APIs only)"));
+if (process.env.ABA_RSA_PUBLIC_KEY) {
+  console.log(ok(`  rsa public key ${preview(process.env.ABA_RSA_PUBLIC_KEY)}`));
+} else {
+  console.log(dim("  rsa public key not set in .env (optional: used for refund, payment link, pre-auth, payout)"));
 }
 console.log();
 

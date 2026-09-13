@@ -83,6 +83,9 @@ export interface PurchaseRequest {
   readonly viewType?: "hosted_view" | "popup" | (string & {});
   readonly customFields?: string;
   readonly returnParams?: string;
+  readonly ctid?: string;
+  readonly pwt?: string;
+  readonly tokenFlag?: string;
 }
 
 export interface PurchaseResponse {
@@ -302,4 +305,369 @@ export interface HashParams {
   readonly currency?: string;
   readonly custom_fields?: string;
   readonly return_params?: string;
+}
+
+export interface CreatePaymentLinkRequest {
+  readonly title: string;
+  readonly amount: number;
+  readonly currency: "USD" | "KHR";
+  readonly returnUrl: string;
+  readonly description?: string;
+  readonly paymentLimit?: number;
+  readonly expiredDate?: number | string;
+  readonly merchantRefNo?: string;
+  readonly payout?: string;
+  readonly image?: Blob | Buffer | Uint8Array;
+  readonly imageFilename?: string;
+  readonly rsaPublicKey?: string;
+}
+
+export interface CreatePaymentLinkResponse {
+  readonly success: boolean;
+  readonly id?: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly amount?: number;
+  readonly currency?: string;
+  readonly paymentLimit?: number;
+  readonly expiredDate?: string;
+  readonly returnUrl?: string;
+  readonly merchantRefNo?: string;
+  readonly paymentLinkUrl?: string;
+  readonly shortLinkUrl?: string;
+  readonly qrString?: string;
+  readonly qrImage?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface GetPaymentLinkDetailsRequest {
+  readonly id: string;
+  readonly rsaPublicKey?: string;
+}
+
+export interface GetPaymentLinkDetailsResponse {
+  readonly success: boolean;
+  readonly id?: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly amount?: number;
+  readonly currency?: string;
+  readonly paymentStatus?: string;
+  readonly clicks?: number;
+  readonly paymentLimit?: number;
+  readonly expiredDate?: string;
+  readonly returnUrl?: string;
+  readonly merchantRefNo?: string;
+  readonly paymentLinkUrl?: string;
+  readonly shortLinkUrl?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface CompletePreAuthRequest {
+  readonly transactionId: string;
+  readonly amount: number;
+  readonly payout?: string;
+  readonly rsaPublicKey?: string;
+}
+
+export interface CompletePreAuthResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly completeAmount?: number;
+  readonly originalAmount?: number;
+  readonly currency?: string;
+  readonly transactionStatus?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface CancelPreAuthRequest {
+  readonly transactionId: string;
+  readonly rsaPublicKey?: string;
+}
+
+export interface CancelPreAuthResponse {
+  readonly success: boolean;
+  readonly transactionId?: string;
+  readonly transactionStatus?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface GetTransactionsByRefRequest {
+  readonly merchantRef: string;
+}
+
+export interface GetTransactionsByRefResponse {
+  readonly success: boolean;
+  readonly merchantRef: string;
+  readonly transactions: readonly TransactionListItem[];
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface LinkAccountRequest {
+  readonly ctid: string;
+  readonly currency: "USD" | "KHR";
+  readonly requestId?: string;
+  readonly tokenFlag?: string;
+  readonly returnDeeplink?: string;
+  readonly callbackUrl?: string;
+}
+
+export interface LinkAccountResponse {
+  readonly success: boolean;
+  readonly qrString?: string;
+  readonly qrImage?: string;
+  readonly abapayDeeplink?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface LinkCardRequest {
+  readonly ctid: string;
+  readonly currency: "USD" | "KHR";
+  readonly requestId?: string;
+  readonly tokenFlag?: string;
+  readonly callbackUrl?: string;
+  readonly continueSuccessUrl?: string;
+  readonly amount?: number;
+  readonly frequency?: string;
+}
+
+export interface LinkCardResponse {
+  readonly success: boolean;
+  readonly html?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface ChargeTokenRequest {
+  readonly transactionId: string;
+  readonly ctid: string;
+  readonly pwt: string;
+  readonly amount: number;
+  readonly currency: "USD" | "KHR";
+  readonly tokenFlag?: string;
+  readonly purchaseType?: "purchase" | "pre-auth";
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly callbackUrl?: string;
+  readonly items?: readonly PurchaseItem[] | string;
+  readonly customFields?: string;
+  readonly returnParams?: string;
+  readonly payout?: string;
+  readonly shippingFee?: number;
+}
+
+export interface ChargeTokenResponse {
+  readonly success: boolean;
+  readonly transactionId: string;
+  readonly totalAmount?: number;
+  readonly currency?: string;
+  readonly status?: PaymentStatus;
+  readonly threeDsUrl?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface PaymentCredential {
+  readonly ctid: string;
+  readonly pwt: string;
+  readonly tokenFlag?: string;
+  readonly sourceOfFund?: string;
+  readonly subscribedAmount?: number;
+  readonly currency?: string;
+  readonly expiredAt?: string;
+  readonly type?: string;
+  readonly status?: number;
+  readonly frequency?: string;
+}
+
+export interface GetTokenDetailsRequest {
+  readonly requestId: string;
+}
+
+export interface GetTokenDetailsResponse {
+  readonly success: boolean;
+  readonly credential?: PaymentCredential;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface RenewTokenRequest {
+  readonly ctid: string;
+  readonly pwt: string;
+  readonly requestId?: string;
+}
+
+export interface RenewTokenResponse {
+  readonly success: boolean;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+export interface RemoveTokenRequest {
+  readonly ctid: string;
+  readonly pwt: string;
+}
+
+export interface RemoveTokenResponse {
+  readonly success: boolean;
+  readonly code?: string;
+  readonly message?: string;
+  readonly error?: string;
+}
+
+// ============================================================================
+// Payout (Funds Route & Splitting) Types
+// ============================================================================
+
+export interface PayoutBeneficiaryData {
+  readonly name?: string;
+  readonly payee?: string;
+  readonly currency?: string;
+  readonly type?: string;
+  readonly status?: number;
+  readonly created_at?: string;
+}
+
+export interface AddPayoutBeneficiaryRequest {
+  /**
+   * Beneficiary identifier: MID or ABA account number.
+   */
+  readonly payee: string;
+  /**
+   * Request timestamp in UTC (YYYYMMDDHHmmss).
+   * If omitted, SDK generates current UTC time.
+   */
+  readonly requestTime?: string;
+  /**
+   * RSA public key in PEM format.
+   * If not provided here, ABAPayWay uses config.rsaPublicKey.
+   */
+  readonly rsaPublicKey?: string;
+}
+
+export interface AddPayoutBeneficiaryResponse {
+  readonly success: boolean;
+  readonly status?: {
+    readonly code?: string;
+    readonly message?: string;
+  };
+  readonly data?: PayoutBeneficiaryData;
+  readonly error?: string;
+  readonly code?: string;
+}
+
+export interface UpdatePayoutBeneficiaryStatusRequest {
+  /**
+   * Beneficiary identifier: MID or ABA account number.
+   */
+  readonly payee: string;
+  /**
+   * Status: 1 to activate, 0 to disable.
+   */
+  readonly status: 0 | 1;
+  /**
+   * Request timestamp in UTC (YYYYMMDDHHmmss).
+   * If omitted, SDK generates current UTC time.
+   */
+  readonly requestTime?: string;
+  /**
+   * RSA public key in PEM format.
+   * If not provided here, ABAPayWay uses config.rsaPublicKey.
+   */
+  readonly rsaPublicKey?: string;
+}
+
+export interface UpdatePayoutBeneficiaryStatusResponse {
+  readonly success: boolean;
+  readonly status?: {
+    readonly code?: string;
+    readonly message?: string;
+  };
+  readonly data?: PayoutBeneficiaryData;
+  readonly error?: string;
+  readonly code?: string;
+}
+
+export interface PayoutBeneficiaryItem {
+  /**
+   * Account number or MID of the beneficiary.
+   */
+  readonly account: string;
+  /**
+   * Payout amount for this beneficiary.
+   */
+  readonly amount: number;
+}
+
+export interface PayoutResultBeneficiary {
+  readonly payout_id?: string;
+  readonly name?: string;
+  readonly mid_acccount?: string;
+  readonly amount?: number;
+  readonly currency?: string;
+}
+
+export interface CreatePayoutRequest {
+  /**
+   * Unique transaction id.
+   */
+  readonly transactionId: string;
+  /**
+   * Total payout amount (sum of all beneficiary amounts).
+   */
+  readonly amount: number;
+  /**
+   * Transaction currency: "USD" or "KHR".
+   */
+  readonly currency: "USD" | "KHR";
+  /**
+   * Array of beneficiaries with account and amount (max 10).
+   */
+  readonly beneficiaries: PayoutBeneficiaryItem[];
+  /**
+   * Optional custom fields object or JSON string.
+   */
+  readonly customFields?: Record<string, any> | string;
+  /**
+   * RSA public key in PEM format.
+   * If not provided here, ABAPayWay uses config.rsaPublicKey.
+   */
+  readonly rsaPublicKey?: string;
+}
+
+export interface CreatePayoutResponse {
+  readonly success: boolean;
+  readonly transaction_id?: string;
+  readonly transaction_date?: string;
+  readonly external_reference?: string;
+  readonly apv?: string;
+  readonly transaction_amount?: number;
+  readonly transaction_currency?: string;
+  readonly beneficiaries?: PayoutResultBeneficiary[];
+  readonly status?: {
+    readonly code?: string;
+    readonly message?: string;
+    readonly tran_id?: string;
+    readonly trace_id?: string;
+  };
+  readonly error?: string;
+  readonly code?: string;
 }

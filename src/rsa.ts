@@ -5,7 +5,10 @@ import { publicEncrypt, constants } from "node:crypto";
  * ABA credential sheets sometimes provide just the raw Base64 string.
  */
 export function formatRsaPublicKey(key: string): string {
-  const trimmed = key.trim();
+  let trimmed = key.trim();
+  if (trimmed.includes("\\n")) {
+    trimmed = trimmed.replace(/\\n/g, "\n");
+  }
   if (trimmed.includes("-----BEGIN")) {
     return trimmed;
   }

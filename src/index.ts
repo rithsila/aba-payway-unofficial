@@ -1,6 +1,6 @@
 export { ABAPayWay } from "./client";
 export { generateKHQR } from "./khqr";
-export { generateABAHash } from "./hash";
+export { generateABAHash, hmacSha512Base64, hmacSha512Hex } from "./hash";
 export { encryptRsaChunks, formatRsaPublicKey } from "./rsa";
 export {
   generateTransactionId,
@@ -31,4 +31,36 @@ export type {
   TransactionListResponse,
   KHQROptions,
   HashParams,
+  CreatePaymentLinkRequest,
+  CreatePaymentLinkResponse,
+  GetPaymentLinkDetailsRequest,
+  GetPaymentLinkDetailsResponse,
+  CompletePreAuthRequest,
+  CompletePreAuthResponse,
+  CancelPreAuthRequest,
+  CancelPreAuthResponse,
+  GetTransactionsByRefRequest,
+  GetTransactionsByRefResponse,
+  LinkAccountRequest,
+  LinkAccountResponse,
+  LinkCardRequest,
+  LinkCardResponse,
+  ChargeTokenRequest,
+  ChargeTokenResponse,
+  PaymentCredential,
+  GetTokenDetailsRequest,
+  GetTokenDetailsResponse,
+  RenewTokenRequest,
+  RenewTokenResponse,
+  RemoveTokenRequest,
+  RemoveTokenResponse,
+  PayoutBeneficiaryData,
+  AddPayoutBeneficiaryRequest,
+  AddPayoutBeneficiaryResponse,
+  UpdatePayoutBeneficiaryStatusRequest,
+  UpdatePayoutBeneficiaryStatusResponse,
+  PayoutBeneficiaryItem,
+  PayoutResultBeneficiary,
+  CreatePayoutRequest,
+  CreatePayoutResponse,
 } from "./types";
