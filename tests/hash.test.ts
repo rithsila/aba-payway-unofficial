@@ -55,4 +55,17 @@ describe("generateABAHash", () => {
     const hash = await generateABAHash(params, "test_key");
     expect(hash).toBeTruthy();
   });
+
+  it("includes lifetime in hash when provided", async () => {
+    const base: HashParams = {
+      req_time: "20260101120000",
+      merchant_id: "M001",
+      tran_id: "T001",
+      amount: "10.00",
+      currency: "USD",
+    };
+    const withoutLifetime = await generateABAHash(base, "key");
+    const withLifetime = await generateABAHash({ ...base, lifetime: 5 }, "key");
+    expect(withLifetime).not.toBe(withoutLifetime);
+  });
 });

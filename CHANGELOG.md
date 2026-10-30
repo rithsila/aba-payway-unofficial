@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-10-30
+
+### Added
+- **Transaction Lifetime Parameter**: Added optional `lifetime?: number` (minutes) to `PurchaseRequest` and `HashParams`, enabling merchants to enforce payment lifetimes between 3 minutes and 30 days.
+- **Hash Signature Specification Compliance**: Updated `generateABAHash` to include `payout` and `lifetime` in the official PayWay concatenation sequence (`... return_params . payout . lifetime`). Defaults to empty string when omitted for full backward compatibility.
+
 ## [1.5.0] - 2026-09-14
 
 ### Added

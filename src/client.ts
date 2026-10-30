@@ -135,6 +135,7 @@ export class ABAPayWay {
       currency: request.currency,
       custom_fields: request.customFields ?? "",
       return_params: request.returnParams ?? "",
+      lifetime: request.lifetime,
     };
 
     const hash = await generateABAHash(hashParams, this.config.apiKey);
@@ -163,6 +164,7 @@ export class ABAPayWay {
     if (request.ctid) body.set("ctid", request.ctid);
     if (request.pwt) body.set("pwt", request.pwt);
     if (request.tokenFlag) body.set("token_flag", request.tokenFlag);
+    if (request.lifetime !== undefined) body.set("lifetime", String(request.lifetime));
 
     // Body-only fields. ABA does not hash `payment_gate` or `view_type`, so
     // they are appended after `hash` is built — adding them to hashParams

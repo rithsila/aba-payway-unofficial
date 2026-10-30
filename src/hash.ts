@@ -63,6 +63,8 @@ export async function generateABAHash(
     params.currency ?? "",
     params.custom_fields ?? "",
     params.return_params ?? "",
+    params.payout ?? "",
+    params.lifetime != null ? String(params.lifetime) : "",
   ].join("");
 
   return hmacSha512Base64(hashString, publicKey);

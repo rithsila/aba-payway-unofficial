@@ -86,6 +86,11 @@ export interface PurchaseRequest {
   readonly ctid?: string;
   readonly pwt?: string;
   readonly tokenFlag?: string;
+  /**
+   * Payment lifetime in minutes. Once it exceeds, the customer is not allowed to pay.
+   * Default value: 30 days. Min: 3 mins, Max: 30 days.
+   */
+  readonly lifetime?: number;
 }
 
 export interface PurchaseResponse {
@@ -305,6 +310,8 @@ export interface HashParams {
   readonly currency?: string;
   readonly custom_fields?: string;
   readonly return_params?: string;
+  readonly payout?: string;
+  readonly lifetime?: number | string;
 }
 
 export interface CreatePaymentLinkRequest {

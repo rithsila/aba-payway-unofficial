@@ -282,6 +282,35 @@ describe("ABAPayWay", () => {
       expect(body.get("hash")).toBe(expected);
     });
 
+    it("includes lifetime in request body and hash when specified", async () => {
+      await aba.createPurchase({
+        transactionId: "EA013",
+        amount: 2.5,
+        currency: "USD",
+        lifetime: 5,
+      });
+      const body = new URLSearchParams(fetchSpy.mock.calls[0][1].body as string);
+      expect(body.get("lifetime")).toBe("5");
+
+      const expectedHash = await generateABAHash(
+        {
+          req_time: body.get("req_time")!,
+          merchant_id: TEST_CONFIG.merchantId,
+          tran_id: "EA013",
+          amount: "2.50",
+          items: "", shipping: "", ctid: "", pwt: "",
+          firstname: "", lastname: "", email: "", phone: "", type: "",
+          payment_option: "", return_url: "", cancel_url: "",
+          continue_success_url: "",
+          return_deeplink: "",
+          currency: "USD", custom_fields: "", return_params: "",
+          lifetime: 5,
+        },
+        TEST_CONFIG.apiKey,
+      );
+      expect(body.get("hash")).toBe(expectedHash);
+    });
+
     // Bad credentials get an HTML error page back, not JSON. Parsing that
     // blindly produced "Unexpected token '<'", which hides the real cause.
     it("explains a non-JSON reply instead of leaking a parse error", async () => {
